@@ -59,7 +59,7 @@ def generate_experiment_name(name, config):
 def create_trainer(name, config):
     if not config.wandb_main and config.suffix == '':
         config.suffix = '-dev'
-    config.experiment = generate_experiment_name(name, config)
+    config.experiment = generate_experiment_name(name, config) # 获得实验名称
     if config.val_check_interval > 1:
         config.val_check_interval = int(config.val_check_interval)
     if config.seed is None:
@@ -67,6 +67,11 @@ def create_trainer(name, config):
 
     # config.dataset_root = Path(config.dataset_root)
 
+    '''
+    借由pytorc_lightning的seed_everything函数，设置随机种子, 使得结果可复现;
+    即如果有好的结果我们可以提前设置好得到的随机树种子，然后再次运行程序，
+    得到的结果应该是一样的。
+    '''
     seed_everything(1337 + config.seed)
     torch.backends.cuda.matmul.allow_tf32 = True  # type: ignore # allow tf32 on matmul
     torch.backends.cudnn.allow_tf32 = True  # type: ignore # allow tf32 on cudnn
@@ -84,6 +89,9 @@ def create_trainer(name, config):
     else:
         logger = TensorBoardLogger(name='tb', save_dir=(Path("runs") / config.experiment))
 
+    '''
+    查找模型的checkpoint文件，如果有的话，则加载模型参数，否则初始化模型参数。
+    '''
     checkpoint_callback = ModelCheckpoint(
         dirpath=(Path("runs") / config.experiment / "checkpoints"),
         save_top_k=-1,
@@ -158,17 +166,30 @@ def step(opt, modules):
 
 
 def create_conv_batch(encoded_features, batch, batch_size, device):
+    """
+    :param encoded_features:
+    :param batch: batch索引，用于体现一个batch中哪些数据属于一个图，如现有两个图装在一个batch中，我们假使
+    第一个图有3个点，后一个图也有三个点，则batch=[0,0,0,1,1,1]
+    :param batch_size: 一个batch中包含的图的数量
+    """
     conv_input, conv_mask = [], []
-    max_sequence_length = 0
+    max_sequence_length = 0 # 记录某个图的最大序列长度
     for k in range(batch_size):
+        # 将encoded_features按batch索引分割，并将每个图的特征从（num_triangles，512）转为（1，512,num_triangles）
         features = encoded_features[batch == k, :].T.contiguous().unsqueeze(0)
         max_sequence_length = max(max_sequence_length, features.shape[2])
         conv_input.append(features)
         conv_mask.append(torch.ones([features.shape[2]], device=device, dtype=torch.bool))
     for k in range(batch_size):
+        # 将每个图由（1，512,num_triangles）填充为（1，512,max_sequence_length），填充值用边缘元素来进行填充
         conv_input[k] = torch.nn.functional.pad(conv_input[k], (0, max_sequence_length - conv_input[k].shape[2]), 'replicate')
+        # 将每个图的mask由（num_triangles）填充到（max_sequence_length），用False填充
         conv_mask[k] = torch.nn.functional.pad(conv_mask[k], (0, max_sequence_length - conv_mask[k].shape[0]), 'constant', False)
+    # 将每个batch的特征拼接起来，对于每个batch中的每个图，其特征在填充后形成一个（1，512,max_sequence_length）的张量
+    # cat后变成（batch_size，512,max_sequence_length）的张量
     conv_input = torch.cat(conv_input, dim=0)
+    # 将每个batch的mask拼接起来，对于每个batch中的每个图，其mask在填充后形成一个（max_sequence_length）的张量
+    # cat后变成（batch_size * max_sequence_length）的张量(一维张量)
     conv_mask = torch.cat(conv_mask, dim=0)
     return conv_input, conv_mask
 

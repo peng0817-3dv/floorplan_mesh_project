@@ -51,3 +51,11 @@ def get_embedder(multires, i=0):
     embedder_obj = Embedder(**embed_kwargs)
     embed = lambda x, eo=embedder_obj: eo.embed(x)
     return embed, embedder_obj.out_dim
+
+### test the code ###
+
+
+def test():
+    embed, out_dim = get_embedder(10)
+if __name__ == '__main__':
+    test()

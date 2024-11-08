@@ -13,7 +13,7 @@ class GraphEncoder(nn.Module):
         self.no_max_pool = no_max_pool
         self.use_point_features = use_point_features
         self.embedder, self.embed_dim = get_embedder(10)
-        self.conv = graph_conv
+        self.conv = graph_conv # 卷积类型
         self.gc1 = get_conv(self.conv, self.embed_dim * 3 + 7, 64, aggr=aggr)
         self.gc2 = get_conv(self.conv, 64, 128, aggr=aggr)
         self.gc3 = get_conv(self.conv, 128, 256, aggr=aggr)
@@ -28,26 +28,31 @@ class GraphEncoder(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x, edge_index, batch):
+        # 位置特征做positional embedding, 如果要改为2维，则嵌入函数需要修改
         x_0 = self.embedder(x[:, :3])
         x_1 = self.embedder(x[:, 3:6])
-        x_2 = self.embedder(x[:, 6:9])
-        x_n = x[:, 9:12]
-        x_ar = x[:, 12:13]
-        x_an_0 = x[:, 13:14]
-        x_an_1 = x[:, 14:15]
-        x_an_2 = x[:, 15:]
+        x_2 = self.embedder(x[:, 6:9]) #  pe后特征63维 = 3维位置 + （10维sin + 10维cos） * 一个点的三维坐标
+        x_n = x[:, 9:12]  # 法向量特征
+        x_ar = x[:, 12:13]  # 面积特征
+        x_an_0 = x[:, 13:14]  # 内角1
+        x_an_1 = x[:, 14:15]  # 内角2
+        x_an_2 = x[:, 15:]  # 内角3
+        # 196维特征 = 63维位置（顶点1） + 63维位置（顶点2） + 63维位置（顶点3） + 3维法向量 + 1维面积 + 3维内角
         x = torch.cat([x_0, x_1, x_2, x_n, x_ar, x_an_0, x_an_1, x_an_2], dim=-1)
+        #
         x = self.relu(self.norm1(self.gc1(x, edge_index)))
         x = self.norm2(self.gc2(x, edge_index))
+        # 单独取了图卷积第二层未relu的特征视作点特征
         point_features = x
         x = self.relu(x)
         x = self.relu(self.norm3(self.gc3(x, edge_index)))
         x = self.relu(self.norm4(self.gc4(x, edge_index)))
+        # 第5层没有使用norm和relu
         x = self.gc5(x, edge_index)
         if not self.no_max_pool:
             x = torch_scatter.scatter_max(x, batch, dim=0)[0]
             x = x[batch, :]
-        if self.use_point_features:
+        if self.use_point_features: # 配置一般为False，不使用
             return torch.cat([x, point_features], dim=-1)
         return x
 

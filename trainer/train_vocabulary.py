@@ -29,19 +29,25 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
             self.interesting_categories = [('03001627', "")]
             self.val_datasets = [TriangleNodesWithFaces(config, 'val', config.scale_augment_val, config.shift_augment_val, '03001627')]
         else:
+            # 数据集的构建
             self.train_dataset = TriangleNodesWithFaces(config, 'train', config.scale_augment, config.shift_augment, None)
             self.interesting_categories = [('02828884', '_bench'), ('02871439', '_bookshelf'), ('03001627', ""), ('03211117', '_display'), ('04379243', '_table')]
             self.val_datasets = []
+            # 只挑感兴趣的进行验证，并且self.val_datasets中不是一个数据集，而是多个数据集的List
             for cat, name in self.interesting_categories:
                 self.val_datasets.append(TriangleNodesWithFaces(config, 'val', config.scale_augment_val, config.shift_augment_val, cat))
+        # 网络的编码器为GraphEncoder，解码器为resnet34_decoder
         self.encoder = GraphEncoder(no_max_pool=config.g_no_max_pool, aggr=config.g_aggr, graph_conv=config.graph_conv, use_point_features=config.use_point_feats, output_dim=576)
         self.decoder = resnet34_decoder(512, config.num_tokens - 2, config.ce_output)
+        # 在进行量化之前，接一个线性层
         self.pre_quant = torch.nn.Linear(192, config.embed_dim)
+        # 在进行量化之后，接一个线性层
         self.post_quant = torch.nn.Linear(config.embed_dim * 3, 512)
+        # 残差量化层
         self.vq = ResidualVQ(
             dim=self.config.embed_dim,
             codebook_size=self.config.n_embed,  # codebook size
-            num_quantizers=config.embed_levels,
+            num_quantizers=config.embed_levels, # 量化层的个数
             commitment_weight=self.config.embed_loss_weight,  # the weight on the commitment loss
             stochastic_sample_codes=True,
             sample_codebook_temp=config.stochasticity,  # temperature for stochastically sampling codes, 0 would be equivalent to non-stochastic
@@ -61,6 +67,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         self.output_dir_mesh_train.mkdir(exist_ok=True, parents=True)
         self.automatic_optimization = False
         self.distribute_features_fn = distribute_features if self.config.distribute_features else dummy_distribute
+        # 初始化结束，可视化一下真实数据
         self.visualize_groundtruth()
 
     def configure_optimizers(self):
@@ -82,19 +89,23 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         optimizer = self.optimizers()
         scheduler = self.lr_schedulers()
         scheduler.step()  # type: ignore
-        encoded_x = self.encoder(data.x, data.edge_index, data.batch)
-        encoded_x = encoded_x.reshape(encoded_x.shape[0] * 3, 192)  # 3N x 192
-        encoded_x = self.distribute_features_fn(encoded_x, data.faces, data.num_vertices.sum(), self.device)
+        # 输入encoder(sage conv) 得到编码后的特征
+        encoded_x = self.encoder(data.x, data.edge_index, data.batch)  # output shape: (N(triangle_num), 576)
+        encoded_x = encoded_x.reshape(encoded_x.shape[0] * 3, 192)  # 3N x 192 (576 = 192 * 3)
+        encoded_x = self.distribute_features_fn(encoded_x, data.faces, data.num_vertices.sum(), self.device)  # 3N x 192 (N个面，每个面3个顶点，每个顶点192维)
         encoded_x = self.pre_quant(encoded_x)  # 3N x 192
-        encoded_x, _, commit_loss = self.vq(encoded_x.unsqueeze(0))
-        encoded_x = encoded_x.squeeze(0)
+        encoded_x, _, commit_loss = self.vq(encoded_x.unsqueeze(0)) # 1 x 3N x 192
+        encoded_x = encoded_x.squeeze(0) # 恢复回 3N x 192
         commit_loss = commit_loss.mean()
-        encoded_x = encoded_x.reshape(-1, 3 * encoded_x.shape[-1])
+        encoded_x = encoded_x.reshape(-1, 3 * encoded_x.shape[-1]) # 重组为 N x 576　
         encoded_x = self.post_quant(encoded_x)
+        # 关于data.batch的解释： https://blog.csdn.net/qq_45770988/article/details/129772968
+        # 将geometric_torch式的batch转化为普通totch式的batch
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, data.batch, self.config.batch_size)
-        decoded_x_conv = self.decoder(encoded_x_conv)
+        # 输入到decoder(resnet34) 得到预测的token
+        decoded_x_conv = self.decoder(encoded_x_conv) # N x 576 => B X n X 9 X num_tokens
         if self.config.ce_output:
-            decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-2], decoded_x_conv.shape[-1])[conv_mask, :, :]
+            decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-2], decoded_x_conv.shape[-1])[conv_mask, :, :] # B*N x 9 x num_tokens
             decoded_tri = softargmax(decoded_x) / (self.config.num_tokens - 3) - 0.5
             _, decoded_normals, decoded_areas, decoded_angles = create_feature_stack_from_triangles(decoded_tri.reshape(-1, 3, 3))
             if self.config.use_smoothed_loss:
@@ -213,6 +224,12 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
                     pass  # sometimes the mesh is invalid (ngon) and we don't want to crash
 
     def visualize_groundtruth(self):
+        '''
+        借由感兴趣的类，可视化训练集和验证集的ground truth
+        output_dir_image_train: 训练集真实图像输出目录
+        output_dir_image_val: 验证集真实图像输出目录
+        从数据集中均匀取出num_val_samples个样本，并将其真实数据坐标转换为mesh，然后将其可视化保存为jpg文件
+        '''
         category_names = [""] + [x[0].strip("_") for x in self.interesting_categories]
         for didx, dataset in enumerate([self.train_dataset] + self.val_datasets):
             output_dir_image = self.output_dir_image_train if didx == 0 else self.output_dir_image_val
@@ -249,10 +266,11 @@ def distribute_features(features, face_indices, num_vertices, device):
     # N = num triangles
     # features is N3 x 192
     # face_indices is N x 3
+    # 确保 特征的N3 和 面数* 顶点数相同
     assert features.shape[0] == face_indices.shape[0] * face_indices.shape[1], "Features and face indices must match in size"
-    vertex_features = torch.zeros([num_vertices, features.shape[1]], device=device)
-    torch_scatter.scatter_mean(features, face_indices.reshape(-1), out=vertex_features, dim=0)
-    distributed_features = vertex_features[face_indices.reshape(-1), :]
+    vertex_features = torch.zeros([num_vertices, features.shape[1]], device=device) # nv x 192
+    torch_scatter.scatter_mean(features, face_indices.reshape(-1), out=vertex_features, dim=0) # 将面的N3 x 192特征 平均分散到顶点 nv x 192
+    distributed_features = vertex_features[face_indices.reshape(-1), :] # 按照面顶点序的 顶点特征
     return distributed_features
 
 
@@ -262,6 +280,7 @@ def dummy_distribute(features, _face_indices, _n, _device):
 
 @hydra.main(config_path='../config', config_name='meshgpt', version_base='1.2')
 def main(config):
+    # 创建一个lightning提供的Trainer实例
     trainer = create_trainer("TriangleTokens", config)
     model = TriangleTokenizationGraphConv(config)
     trainer.fit(model, ckpt_path=config.resume)
