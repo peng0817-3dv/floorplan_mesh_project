@@ -103,14 +103,14 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         # 将geometric_torch式的batch转化为普通totch式的batch
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, data.batch, self.config.batch_size)
         # 输入到decoder(resnet34) 得到预测的token
-        decoded_x_conv = self.decoder(encoded_x_conv) # N x 576 => B X n X 9 X num_tokens
+        decoded_x_conv = self.decoder(encoded_x_conv) # B x 512 x max_graph_size => B X max_graph_size X 9 X num_tokens
         if self.config.ce_output:
-            decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-2], decoded_x_conv.shape[-1])[conv_mask, :, :] # B*N x 9 x num_tokens
-            decoded_tri = softargmax(decoded_x) / (self.config.num_tokens - 3) - 0.5
+            decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-2], decoded_x_conv.shape[-1])[conv_mask, :, :] # num_triangles x 9  x num_tokens(129)
+            decoded_tri = softargmax(decoded_x) / (self.config.num_tokens - 3) - 0.5 # num_triangles x 9
             _, decoded_normals, decoded_areas, decoded_angles = create_feature_stack_from_triangles(decoded_tri.reshape(-1, 3, 3))
             if self.config.use_smoothed_loss:
                 otarget = torch.nn.functional.one_hot(data.y.reshape(-1), num_classes=self.config.num_tokens - 2).float()
-                otarget = otarget.unsqueeze(1)
+                otarget = otarget.unsqueeze(1) # y * num_tokens(129)
                 starget = torch.nn.functional.conv1d(otarget, self.smoothing_weight, bias=None, stride=1, padding=2, dilation=1, groups=1)
                 if self.config.use_multimodal_loss:
                     starget_a = starget.reshape(-1, decoded_x.shape[-2] * decoded_x_conv.shape[-1])
@@ -123,6 +123,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
                     loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), starget).mean()
             else:
                 loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1), reduction='mean')
+            # 计算 cross entropy loss 完毕
             y_coords = data.y / (self.config.num_tokens - 3) - 0.5
             loss_tri = torch.nn.functional.mse_loss(decoded_tri, y_coords, reduction='mean')
             loss_normals = torch.nn.functional.mse_loss(decoded_normals, data.x[:, 9:12], reduction='mean')
@@ -137,7 +138,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
             loss_areas = torch.nn.functional.mse_loss(decoded_areas, data.x[:, 12:13], reduction='mean')
             loss_angles = torch.nn.functional.mse_loss(decoded_angles, data.x[:, 13:16], reduction='mean')
 
-        acc = self.get_accuracy(decoded_x, data.y)
+        acc = self.get_accuracy(decoded_x, data.y) # 计算准确度
         acc_triangle = self.get_triangle_accuracy(decoded_x, data.y)
         self.log("train/ce_loss", loss.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
         self.log("train/mse_loss", loss_tri.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
@@ -147,6 +148,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         self.log("train/embed_loss", commit_loss.item(), on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
         self.log("train/acc", acc.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
         self.log("train/acc_tri", acc_triangle.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
+        # 最终loss 等于 ce_loss + mse_loss + norm_loss + area_loss + angle_loss + embed_loss
         loss = loss + loss_tri * self.config.tri_weight + loss_normals * self.config.norm_weight + loss_areas * self.config.area_weight + loss_angles * self.config.angle_weight + commit_loss
         # loss = loss + loss_tri * self.config.tri_weight + commit_loss
         loss = loss / self.config.gradient_accumulation_steps  # scale the loss to account for gradient accumulation

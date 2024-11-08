@@ -45,6 +45,7 @@ class TriangleNodes(GeometricDataset):
                     data[f'vertices_val'] = data[f'vertices_train']
                     data[f'faces_val'] = data[f'faces_train']
                     data[f'name_val'] = data[f'name_train']
+
             if not config.overfit:
                 self.names = data[f'name_{split}']
                 self.cached_vertices = data[f'vertices_{split}']
