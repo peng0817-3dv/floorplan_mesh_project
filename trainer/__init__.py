@@ -34,15 +34,16 @@ def quit_handler(sig, frame):
     sys.exit(1)
 
 
-def register_debug_signal_handlers(sig=signal.SIGUSR1, handler=print_traceback_handler):
-    print(f'Setting signal {sig} handler {handler}')
-    signal.signal(sig, handler)
+def register_debug_signal_handlers(sig=None, handler=print_traceback_handler):
+    # print(f'Setting signal {sig} handler {handler}')
+    # signal.signal(sig, handler)
+    pass
 
 
-def register_quit_signal_handlers(sig=signal.SIGUSR2, handler=quit_handler):
-    print(f'Setting signal {sig} handler {handler}')
-    signal.signal(sig, handler)
-
+def register_quit_signal_handlers(sig=None, handler=quit_handler):
+    # print(f'Setting signal {sig} handler {handler}')
+    # signal.signal(sig, handler)
+    pass
 
 def generate_experiment_name(name, config):
     if config.resume is not None:
@@ -102,6 +103,7 @@ def create_trainer(name, config):
     )
 
     gpu_count = torch.cuda.device_count()
+    print(f'Using {gpu_count} GPUs')
 
     precision = 'bf16' if torch.cuda.is_bf16_supported() else 16
     precision = 32
