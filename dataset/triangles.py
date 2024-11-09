@@ -1,5 +1,6 @@
 from typing import Mapping, Sequence
 
+import hydra
 import omegaconf
 import torch
 import numpy as np
@@ -33,7 +34,7 @@ class TriangleNodes(GeometricDataset):
         self.use_start_stop = use_start_stop
         self.ce_output = config.ce_output
         self.only_backward_edges = only_backward_edges
-        self.num_tokens = config.num_tokens - 3
+        self.num_tokens = config.num_tokens - 3 # num token(131) - 3 = 128
         with open(data_path, 'rb') as fptr:
             data = pickle.load(fptr)
             if force_category is not None:
@@ -80,6 +81,7 @@ class TriangleNodes(GeometricDataset):
         triangles, normals, areas, angles, vertices, faces = create_feature_stack(vertices, faces, self.num_tokens)
         features = np.hstack([triangles, normals, areas, angles])
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
+        # 取前9个特征，实质就是坐标特征
         target = torch.from_numpy(features[:, :9]).float()
         if self.use_start_stop:
             features = np.concatenate([np.zeros((1, features.shape[1])), features], axis=0)
@@ -88,6 +90,7 @@ class TriangleNodes(GeometricDataset):
         if self.only_backward_edges:
             face_neighborhood = face_neighborhood[face_neighborhood[:, 1] > face_neighborhood[:, 0], :]
             # face_neighborhood = modify so that only edges in backward direction are present
+        # 是否对标签做离散化
         if self.ce_output:
             target = quantize_coordinates(target, self.num_tokens)
         return features, target, vertices, faces, face_neighborhood
@@ -336,9 +339,15 @@ def unit_vector(vector):
 
 
 def create_feature_stack(vertices, faces, num_tokens):
+    #TODO: 使用lucidrains提供的重排列思路吧。
+
+    # 此处的对数据按照顶点和面进行排序（y, x, z），并同步重新排列了faces的顺序
+    # 并且整个排序的基础是建立在使用num_tokens定义的量级，将坐标进行离散化后排序的结果，其返回的坐标也是在归一空间的离散化整合分布
     vertices, faces = sort_vertices_and_faces(vertices, faces, num_tokens)
     # need more features: positions, angles, area, cross_product
+    # triangles [face_num, 3, 3]
     triangles = vertices[faces, :]
+    # 得到法向量、mesh面积、角度后顺便把triangles的形状变成[face_num, 3 * 3]
     triangles, normals, areas, angles = create_feature_stack_from_triangles(triangles)
     return triangles, normals, areas, angles, vertices, faces
 
@@ -348,3 +357,12 @@ def create_feature_stack_from_triangles(triangles):
     t_angles = angle(triangles) / float(np.pi)
     t_normals = unit_vector(normal(triangles))
     return triangles.reshape(-1, 9), t_normals.reshape(-1, 3), t_areas.reshape(-1, 1), t_angles.reshape(-1, 3)
+
+@hydra.main(config_path='../config', config_name='meshgpt', version_base='1.2')
+def main(config):
+    train_dataset = TriangleNodesWithFaces(config, 'train', config.scale_augment, config.shift_augment, None)
+    data_0 = train_dataset.get(0)
+    print(data_0)
+
+if __name__ == '__main__':
+    main()
