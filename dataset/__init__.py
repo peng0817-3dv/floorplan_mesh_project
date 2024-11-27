@@ -105,5 +105,5 @@ def sort_vertices_and_faces(vertices_, faces_, num_tokens=256):
     vertices = vertices_quantized / num_tokens - 0.5
     # order: Z, Y, X --> X, Y, Z
     # 上述是原注释，但是我疑惑，明明应该是将y,x,z转换为 z,x,y才对,如果要按照注释的话，则输入的点的坐标应该是y,z,x,但过于违背常识，倾向于认为注释错了
-    vertices = np.stack([vertices[:, 2], vertices[:, 1], vertices[:, 0]], axis=-1)
+    vertices = np.stack([vertices[:, 1], vertices[:, 0], vertices[:, 2]], axis=-1)
     return vertices, faces

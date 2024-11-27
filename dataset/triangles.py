@@ -339,8 +339,6 @@ def unit_vector(vector):
 
 
 def create_feature_stack(vertices, faces, num_tokens):
-    #TODO: 使用lucidrains提供的重排列思路吧。
-
     # 此处的对数据按照顶点和面进行排序（y, x, z），并同步重新排列了faces的顺序
     # 并且整个排序的基础是建立在使用num_tokens定义的量级，将坐标进行离散化后排序的结果，其返回的坐标也是在归一空间的离散化整合分布
     vertices, faces = sort_vertices_and_faces(vertices, faces, num_tokens)
