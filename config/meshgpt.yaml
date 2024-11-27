@@ -4,8 +4,8 @@ dataset_root: '../data/shapenet/processed_data.pkl'
 # not actually number of tokens, but the quantization resolution + 3
 num_tokens: 131
 
-gradient_accumulation_steps: 2 # used to simulate larger batch sizes
-batch_size: 32 # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps: 32 # used to simulate larger batch sizes
+batch_size: 2 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size: 4608 # context_size of the transformer, for good performance block_size > max sequence length
 padding: 0.0  # fraction of padding allowed, when sequences are beyond the transformer context size
 
@@ -25,7 +25,7 @@ val_check_percent: 1.0  # check this proportion of val set when evaluation runs
 val_check_interval: 1  # run evaluation every x% of the train set steps
 resume: null  # resume from a checkpoint
 num_workers: 6
-logger: wandb
+logger: none
 overfit: False  # overfitting dataloaders
 
 num_val_samples: 16  # number of meshes to visualize in evaluation
