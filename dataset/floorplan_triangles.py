@@ -190,15 +190,24 @@ class FPTriangleNodes(GeometricDataset):
         self.low_augment = config.low_augment
         self.split_ratio = 0.8
 
-        data = {"features": [], "vertices": [], "faces": [], "labels": []}
-        for scene_name in tqdm(os.listdir(data_path)):
-            scene_full_path = os.path.join(data_path, scene_name)
-            vertices, faces, face_feature, labels = read_vertexes_and_faces(scene_full_path)
-            data["features"].append(face_feature)
-            data["vertices"].append(vertices)
-            data["faces"].append(faces)
-            data["labels"].append(labels)
-            train_size = int(len(os.listdir(data_path)) * self.split_ratio)
+        data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
+        if os.path.exists(data_cache_path):
+            with open(data_cache_path, "rb") as f:
+                data = pickle.load(f)
+            print(f"load data from cache,cache path:{data_cache_path}")
+        else:
+            data = {"features": [], "vertices": [], "faces": [], "labels": []}
+            for scene_name in tqdm(os.listdir(data_path)):
+                scene_full_path = os.path.join(data_path, scene_name)
+                vertices, faces, face_feature, labels = read_vertexes_and_faces(scene_full_path)
+                data["features"].append(face_feature)
+                data["vertices"].append(vertices)
+                data["faces"].append(faces)
+                data["labels"].append(labels)
+            with open(data_cache_path, "wb") as f:
+                pickle.dump(data,f)
+
+        train_size = int(len(data["faces"]) * self.split_ratio)
         if split == "train":
             self.extra_features = data[f'features'][:train_size]
             self.cached_vertices = data[f'vertices'][:train_size]
@@ -209,7 +218,7 @@ class FPTriangleNodes(GeometricDataset):
             self.cached_vertices = data[f'vertices'][train_size:]
             self.cached_faces = data[f'faces'][train_size:]
             self.labels = data[f'labels'][train_size:]
-        print(len(self.cached_vertices), "meshes loaded")
+        print(len(self.cached_vertices), "meshes loaded loading for", split)
 
     def len(self):
         return len(self.cached_vertices)
