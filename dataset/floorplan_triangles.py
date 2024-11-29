@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from dataset import sort_vertices_and_faces,sort_vertices_and_faces_and_labels_and_features
 from dataset.triangles import FaceCollator
-from util.misc import scale_vertices, normalize_vertices, shift_vertices
+from util.misc import scale_vertices, normalize_vertices, shift_vertices, rotate_vertices, mirror_vertices
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
@@ -218,7 +218,11 @@ class FPTriangleNodes(GeometricDataset):
             self.cached_vertices = data[f'vertices'][train_size:]
             self.cached_faces = data[f'faces'][train_size:]
             self.labels = data[f'labels'][train_size:]
+
+        if split == "train":
+            self.data_augmentation()
         print(len(self.cached_vertices), "meshes loaded loading for", split)
+
 
     def len(self):
         return len(self.cached_vertices)
@@ -301,6 +305,34 @@ class FPTriangleNodes(GeometricDataset):
         mesh.export(f"{save_path_root}/GT_scene_{idx}_{suffer}.obj")
         plt.savefig(f'{save_path_root}/GT_scene_{idx}_{suffer}.png',dpi=1200)
         plt.close("all")
+
+    def data_augmentation(self):
+        augmented_vertices = self.cached_vertices.copy()
+        augmented_faces = self.cached_faces.copy()
+        augmented_labels = self.labels.copy()
+        augmented_features = self.extra_features.copy()
+
+        transformations = [
+            lambda v: rotate_vertices(v, 90),
+            lambda v: rotate_vertices(v, 180),
+            lambda v: rotate_vertices(v, 270),
+            lambda v: mirror_vertices(v, 'x'),
+            lambda v: mirror_vertices(v, 'y')
+        ]
+
+        for transform in transformations:
+            augmented_vertices.extend([
+                transform(v) for v in self.cached_vertices
+            ])
+            augmented_faces.extend(self.cached_faces)
+            augmented_labels.extend(self.labels)
+            augmented_features.extend(self.extra_features)
+
+        print(f" augmented data size: {len(augmented_vertices)},origin data size: {len(self.cached_vertices)}")
+        self.cached_vertices = augmented_vertices
+        self.cached_faces = augmented_faces
+        self.labels = augmented_labels
+        self.extra_features = augmented_features
 
 
 class FPTriangleNodesDataloader(torch.utils.data.DataLoader):
