@@ -108,7 +108,10 @@ class ResNetDecoder(nn.Module):
         self.ce_output = ce_output
 
         if ce_output:
-            self.fc = nn.Conv1d(320 * block.expansion, self.num_tokens * 9, 1)
+            # 320 -> 1152
+            # 修改此处的fc的输出维度，从self.num_tokens*9改为self.num_cls
+            assert self.num_tokens == 32
+            self.fc = nn.Conv1d(320 * block.expansion, self.num_tokens, 1)
         else:
             self.fc = nn.Conv1d(320 * block.expansion, 9, 1)
 
@@ -154,7 +157,7 @@ class ResNetDecoder(nn.Module):
         x = self.layer4(x)
         x = self.fc(x)
         if self.ce_output:
-            x = x.permute((0, 2, 1)).reshape(B, N, 9, self.num_tokens)
+            x = x.permute((0, 2, 1)).reshape(B, N, self.num_tokens)
         else:
             x = x.permute((0, 2, 1)).reshape(B, N, 9)
         return x

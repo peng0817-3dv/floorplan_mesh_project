@@ -50,6 +50,7 @@ def generate_experiment_name(name, config):
         experiment = Path(config.resume).parents[1].name
         os.environ['experiment'] = experiment
     elif not os.environ.get('experiment'):
+        # 一般常用的实验名称格式为：日期_实验名称_配置名称_随机名字字符串
         experiment = f"{datetime.datetime.now().strftime('%m%d%H%M')}_{name}_{config.experiment}_{randomname.get_name()}"
         os.environ['experiment'] = experiment
     else:

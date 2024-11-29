@@ -177,7 +177,7 @@ def read_vertexes_and_faces(obj_root_path):
 
 
 class FPTriangleNodes(GeometricDataset):
-    def __init__(self, config, split):
+    def __init__(self, config, split,scale_augment=False,shift_augment=False):
         super().__init__()
         data_path = Path(config.dataset_root)
         self.cached_vertices = []
@@ -185,9 +185,9 @@ class FPTriangleNodes(GeometricDataset):
         self.extra_features = []
         # self.only_backward_edges = only_backward_edges
         self.num_tokens = config.num_tokens
-        self.scale_augment = False
-        self.shift_augment = False
-        self.low_augment = False
+        self.scale_augment = scale_augment
+        self.shift_augment = shift_augment
+        self.low_augment = config.low_augment
         self.split_ratio = 0.8
 
         data = {"features": [], "vertices": [], "faces": [], "labels": []}
@@ -239,7 +239,7 @@ class FPTriangleNodes(GeometricDataset):
         # triangles, normals, areas, angles, vertices, faces = create_feature_stack(vertices, faces, self.num_tokens)
         features = np.hstack([triangles, confidence])
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
-        target = torch.from_numpy(labels).int()
+        target = torch.from_numpy(labels).long() - 1
         return features, target, vertices, faces, face_neighborhood
 
     def get(self, idx):
@@ -248,7 +248,7 @@ class FPTriangleNodes(GeometricDataset):
                              edge_index=torch.from_numpy(face_neighborhood.T).long(),
                              num_vertices=vertices.shape[0], faces=torch.from_numpy(np.array(faces)).long())
 
-    def save_sample_data_by_idx(self,idx,is_quantized=False):
+    def save_sample_data_by_idx(self,idx,is_quantized=False,save_path_root = os.getcwd()):
         vertices = self.cached_vertices[idx]
         faces = self.cached_faces[idx]
         labels = self.labels[idx]
@@ -278,20 +278,20 @@ class FPTriangleNodes(GeometricDataset):
 
         tris = np.array([[vertices[face[0]][:2], vertices[face[1]][:2], vertices[face[2]][:2]] for face in faces])
 
-        # attribute = np.array(labels)
-        attribute = np.array([f[6] for f in features])
+        attribute = np.array(labels)
+        # attribute = np.array([f[6] for f in features])
         tris = PolyCollection(tris, array=attribute, cmap='RdYlGn')
         fig, ax = plt.subplots()
         ax.add_collection(tris)
         ax.autoscale()
 
         suffer = "quantized" if is_quantized else "non_quantized"
-        current_path = os.getcwd()
-        print("存放obj文件路径:", current_path)
-        # mesh.show()
-        mesh.export(f"{current_path}/mesh_{idx}_{suffer}.obj")
 
-        plt.savefig(f'{current_path}/mesh_{idx}_{suffer}.png',dpi=1200)
+        # mesh.show()
+        # GT_{category_names[didx]}_{k}.jpg
+        mesh.export(f"{save_path_root}/GT_scene_{idx}_{suffer}.obj")
+        plt.savefig(f'{save_path_root}/GT_scene_{idx}_{suffer}.png',dpi=1200)
+        plt.close("all")
 
 
 class FPTriangleNodesDataloader(torch.utils.data.DataLoader):

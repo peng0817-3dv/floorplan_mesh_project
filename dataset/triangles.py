@@ -79,6 +79,7 @@ class TriangleNodes(GeometricDataset):
         if self.shift_augment:
             vertices = shift_vertices(vertices)
         triangles, normals, areas, angles, vertices, faces = create_feature_stack(vertices, faces, self.num_tokens)
+        # 9 + 3 + 1 + 3
         features = np.hstack([triangles, normals, areas, angles])
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
         # 取前9个特征，实质就是坐标特征

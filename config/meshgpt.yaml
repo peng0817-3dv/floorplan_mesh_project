@@ -1,6 +1,6 @@
 # data
 dataset: 'shapenet'
-dataset_root: '../data/shapenet/processed_data.pkl'
+dataset_root: 'G:/workspace_plane2DDL/RefCode/meshgpt-official-version/MeshGPT/data/structure3d'
 # not actually number of tokens, but the quantization resolution + 3
 num_tokens: 131
 
@@ -24,7 +24,7 @@ sanity_steps: 0  # sanity steps before the run
 val_check_percent: 1.0  # check this proportion of val set when evaluation runs
 val_check_interval: 1  # run evaluation every x% of the train set steps
 resume: null  # resume from a checkpoint
-num_workers: 6
+num_workers: 4
 logger: none
 overfit: False  # overfitting dataloaders
 
@@ -34,7 +34,7 @@ top_k_tokens: 200  # sampling top-k tokens
 top_p: 0.9  # p val for nucleus sampling
 temperature: 0.8  # temprature for sampling
 sequence_stride: 32  # use when sequences are larger than context length
-use_smoothed_loss: True  # smoothing over neighboring tokens in the quantized space
+use_smoothed_loss: False  # smoothing over neighboring tokens in the quantized space
 
 use_point_feats: False  # point net like point features in graph network
 graph_conv: sage  # flavor of graph convs
@@ -88,3 +88,7 @@ hydra:
   output_subdir: null # Disable saving of config files. We'll do that ourselves.
   run:
     dir: .
+
+
+# FT settings
+num_cls: 32

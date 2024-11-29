@@ -61,7 +61,9 @@ class test_Dataset:
 @hydra.main(config_path='../config', config_name='meshgpt', version_base='1.2')
 def main(config):
     sample_size = 32
+
     config.dataset_root = 'G:/workspace_plane2DDL/RefCode/meshgpt-official-version/MeshGPT/data/structure3d'
+
     dataset = FPTriangleNodes(config, 'train')
     data = dataset.get(0)
     print(data)
