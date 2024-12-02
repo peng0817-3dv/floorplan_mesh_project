@@ -10,8 +10,8 @@ from util.visualization import plot_vertices_and_faces_with_labels
 def main(config):
     load_model_experiment_path = ""
     load_checkpoint_name = ""
-    checkpoint_path = os.path.join([load_model_experiment_path, "checkpoints", load_checkpoint_name])
-    predict_path_root = os.path.join([load_model_experiment_path, "predict"])
+    checkpoint_path = os.path.join(load_model_experiment_path, "checkpoints", load_checkpoint_name)
+    predict_path_root = os.path.join(load_model_experiment_path, "predict")
     if not os.path.exists(predict_path_root):
         os.makedirs(predict_path_root)
 
