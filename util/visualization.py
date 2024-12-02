@@ -1,7 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+
+import trimesh
 from PIL import Image
+from matplotlib.collections import PolyCollection
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
@@ -74,6 +77,26 @@ def plot_vertices_and_faces(vertices, faces, output_path):
     plt.savefig(output_path)
     plt.close("all")
 
+
+def plot_vertices_and_faces_with_labels(vertices, faces, labels,output_path):
+    ngons = [[vertices[v, :].tolist() for v in f] for f in faces]
+    attribute = np.array(labels)
+    tris = PolyCollection(ngons, array=attribute, cmap='RdYlGn')
+    fig, ax = plt.subplots()
+    ax.add_collection(tris)
+    ax.autoscale()
+    plt.savefig(output_path, dpi=1200)
+    plt.close("all")
+
+
+def export_mesh_to_obj(vertices, faces, output_path):
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    mesh.export(output_path)
+
+
+def export_mesh_to_shp(vertices,faces,labels,output_path):
+    # TODO: 可视化为shp文件
+    pass
 
 def visualize_quantized_mesh_vertices_gif(token_sequence, num_tokens, output_dir):
     vertices = tokens_to_vertices(token_sequence, num_tokens)

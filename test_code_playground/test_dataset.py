@@ -19,10 +19,9 @@ def main(config):
     if not os.path.exists(augmentation_data_root):
         os.makedirs(augmentation_data_root)
     dataset = FPTriangleNodes(config, 'train')
-    origin_size = len(dataset) // 6
-    sample_id = np.random.randint(0,origin_size)
-    for i in range(6):
-        data = dataset.save_sample_data_by_idx(sample_id + i*origin_size,True,augmentation_data_root)
+    for id ,data in enumerate(dataset):
+        print(id)
+    #dataset.save_sample_data_by_idx(0,True)
 
 
 

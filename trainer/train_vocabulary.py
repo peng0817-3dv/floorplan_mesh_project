@@ -67,7 +67,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         self.automatic_optimization = False
         self.distribute_features_fn = distribute_features if self.config.distribute_features else dummy_distribute
         # 初始化结束，可视化一下真实数据
-        self.visualize_groundtruth()
+        # self.visualize_groundtruth()
 
     def configure_optimizers(self):
         # parameters = list(self.encoder.parameters()) + list(self.decoder.parameters()) + list(self.pre_quant.parameters()) + list(self.post_quant.parameters()) + list(self.vq.parameters())
@@ -204,6 +204,18 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         # if not torch.isnan(acc_triangle).any():
         #     self.log(f"val/acc_tri{self.interesting_categories[dataloader_idx][1]}", acc_triangle.item(), add_dataloader_idx=False, on_step=False, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
 
+
+
+    def inference_data(self, data):
+        encoded_x = self.encoder(data.x.to(self.device), data.edge_index.to(self.device), torch.zeros([data.x.shape[0]],device=self.device).long())
+        encoded_x = self.post_quant(encoded_x)
+        encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, torch.zeros([data.x.shape[0]], device=self.device).long(), 1)
+        decoded_x_conv = self.decoder(encoded_x_conv)
+        decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-1])[conv_mask, :]
+        predict_labels = decoded_x.argmax(-1).reshape(-1)
+        return predict_labels.detach().cpu().numpy()
+
+
     @rank_zero_only
     def on_validation_epoch_end(self):
         # category_names = [""] + [x[0].strip("_") for x in self.interesting_categories]
@@ -302,6 +314,7 @@ def main(config):
     trainer = create_trainer("TriangleTokens", config)
     model = TriangleTokenizationGraphConv(config)
     trainer.fit(model, ckpt_path=config.resume)
+
 
 
 if __name__ == '__main__':

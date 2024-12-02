@@ -12,6 +12,7 @@ from tqdm import tqdm
 from dataset import sort_vertices_and_faces,sort_vertices_and_faces_and_labels_and_features
 from dataset.triangles import FaceCollator
 from util.misc import scale_vertices, normalize_vertices, shift_vertices, rotate_vertices, mirror_vertices
+from util.visualization import plot_vertices_and_faces_with_labels,export_mesh_to_obj
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
@@ -188,7 +189,7 @@ class FPTriangleNodes(GeometricDataset):
         self.scale_augment = scale_augment
         self.shift_augment = shift_augment
         self.low_augment = config.low_augment
-        self.split_ratio = 0.8
+
 
         data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
         if os.path.exists(data_cache_path):
@@ -207,17 +208,24 @@ class FPTriangleNodes(GeometricDataset):
             with open(data_cache_path, "wb") as f:
                 pickle.dump(data,f)
 
-        train_size = int(len(data["faces"]) * self.split_ratio)
+        train_size = int(len(data["faces"]) * config.train_ratio)
+        val_size = int(len(data["faces"]) * config.val_ratio)
+        test_size = len(data["faces"]) - train_size - val_size
         if split == "train":
             self.extra_features = data[f'features'][:train_size]
             self.cached_vertices = data[f'vertices'][:train_size]
             self.cached_faces = data[f'faces'][:train_size]
             self.labels = data[f'labels'][:train_size]
         elif split == "val":
-            self.extra_features = data[f'features'][train_size:]
-            self.cached_vertices = data[f'vertices'][train_size:]
-            self.cached_faces = data[f'faces'][train_size:]
-            self.labels = data[f'labels'][train_size:]
+            self.extra_features = data[f'features'][train_size:train_size+val_size]
+            self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
+            self.cached_faces = data[f'faces'][train_size:train_size+val_size]
+            self.labels = data[f'labels'][train_size:train_size+val_size]
+        elif split == "test":
+            self.extra_features = data[f'features'][train_size+val_size:]
+            self.cached_vertices = data[f'vertices'][train_size+val_size:]
+            self.cached_faces = data[f'faces'][train_size+val_size:]
+            self.labels = data[f'labels'][train_size+val_size:]
 
         if split == "train":
             self.data_augmentation()
@@ -284,27 +292,11 @@ class FPTriangleNodes(GeometricDataset):
         if is_quantized:
             vertices, faces, labels, features = \
                 sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, features, self.num_tokens)
-            mesh = trimesh.Trimesh(vertices=vertices, faces=faces,process=False)
-
-        else:
-            mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-
-        tris = np.array([[vertices[face[0]][:2], vertices[face[1]][:2], vertices[face[2]][:2]] for face in faces])
-
-        attribute = np.array(labels)
-        # attribute = np.array([f[6] for f in features])
-        tris = PolyCollection(tris, array=attribute, cmap='RdYlGn')
-        fig, ax = plt.subplots()
-        ax.add_collection(tris)
-        ax.autoscale()
 
         suffer = "quantized" if is_quantized else "non_quantized"
+        export_mesh_to_obj(vertices, faces, f"{save_path_root}/GT_scene_{idx}_{suffer}.obj")
+        plot_vertices_and_faces_with_labels(vertices, faces, labels, f"{save_path_root}/GT_scene_{idx}_{suffer}.png")
 
-        # mesh.show()
-        # GT_{category_names[didx]}_{k}.jpg
-        mesh.export(f"{save_path_root}/GT_scene_{idx}_{suffer}.obj")
-        plt.savefig(f'{save_path_root}/GT_scene_{idx}_{suffer}.png',dpi=1200)
-        plt.close("all")
 
     def data_augmentation(self):
         augmented_vertices = self.cached_vertices.copy()
