@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -9,7 +11,20 @@ from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from dataset import newface_token, stopface_token, padface_token
+import shapefile
 
+
+# 约定-平面shp文件夹下各子文件的文件名
+DATA_VERTICE_FILENAME = "vertexes.shp"
+DATA_EDGE_FILENAME = "edges.shp"
+DATA_FACE_FILENAME = "poly.shp"
+
+# 约定-edges.shp文件中的属性字段名
+PROPERTY_FACE_CONFIDENCE = "confidence"
+PROPERTY_FACE_P0 = "pnt0"  # 三角面的顶点1的序号
+PROPERTY_FACE_P1 = "pnt1"  # 三角面的顶点2的序号
+PROPERTY_FACE_P2 = "pnt2"  # 三角面的顶点3的序号
+PROPERTY_FACE_LABEL = "label"  # 面片label
 
 def visualize_points(points, vis_path, colors=None):
     if colors is None:
@@ -97,7 +112,50 @@ def export_mesh_to_obj(vertices, faces, output_path):
 
 def export_mesh_to_shp(vertices,faces,labels,output_path):
     # TODO: 可视化为shp文件
-    pass
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    vertices_file = os.path.join(output_path, DATA_VERTICE_FILENAME)
+    faces_file = os.path.join(output_path, DATA_FACE_FILENAME)
+
+    writer = shapefile.Writer(vertices_file)
+    writer.field("PROPERTY_VERTICE_X", "N", 5, 0)
+    writer.field("PROPERTY_VERTICE_Y", "N", 5, 0)
+    for vertex in vertices:
+        writer.point(vertex[0], vertex[1])
+    for vertex_id, vertex in enumerate(vertices):
+        writer.record(vertex[0], vertex[1])
+    writer.close()
+
+    writer = shapefile.Writer(faces_file)
+    writer.field(PROPERTY_FACE_LABEL, "N", 5)  # 修改为字符串类型
+    writer.field(PROPERTY_FACE_P0, "N", 5)
+    writer.field(PROPERTY_FACE_P1, "N", 5)
+    writer.field(PROPERTY_FACE_P2, "N", 5)
+
+    for face_id, face in enumerate(faces):
+        # 获取面的顶点坐标
+        p0 = vertices[face[0]]
+        p1 = vertices[face[1]]
+        p2 = vertices[face[2]]
+
+        # 创建多边形
+        polygon = [
+            [p0[0], p0[1]],
+            [p1[0], p1[1]],
+            [p2[0], p2[1]],
+            [p0[0], p0[1]]  # 闭合多边形
+        ]
+
+        writer.poly([polygon])
+        writer.record(
+            labels[face_id],
+            face[0],
+            face[1],
+            face[2],
+        )
+    # 保存并关闭文件
+    writer.close()
 
 def visualize_quantized_mesh_vertices_gif(token_sequence, num_tokens, output_dir):
     vertices = tokens_to_vertices(token_sequence, num_tokens)
