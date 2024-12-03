@@ -176,6 +176,70 @@ def read_vertexes_and_faces(obj_root_path):
     labels = np.array(labels)
     return vertices, faces, face_feature, labels
 
+class FPOriginTriangleNodes(GeometricDataset):
+    def __init__(self, config,split):
+        super().__init__()
+        data_path = Path(config.dataset_root)
+        self.cached_vertices = []
+        self.cached_faces = []
+        self.extra_features = []
+
+        data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
+        if os.path.exists(data_cache_path):
+            with open(data_cache_path, "rb") as f:
+                data = pickle.load(f)
+            print(f"load data from cache,cache path:{data_cache_path}")
+        else:
+            data = {"features": [], "vertices": [], "faces": [], "labels": []}
+            for scene_name in tqdm(os.listdir(data_path)):
+                scene_full_path = os.path.join(data_path, scene_name)
+                vertices, faces, face_feature, labels = read_vertexes_and_faces(scene_full_path)
+                data["features"].append(face_feature)
+                data["vertices"].append(vertices)
+                data["faces"].append(faces)
+                data["labels"].append(labels)
+            with open(data_cache_path, "wb") as f:
+                pickle.dump(data,f)
+
+        train_size = int(len(data["faces"]) * config.train_ratio)
+        val_size = int(len(data["faces"]) * config.val_ratio)
+
+        if split == "train":
+            self.extra_features = data[f'features'][:train_size]
+            self.cached_vertices = data[f'vertices'][:train_size]
+            self.cached_faces = data[f'faces'][:train_size]
+            self.labels = data[f'labels'][:train_size]
+        elif split == "val":
+            self.extra_features = data[f'features'][train_size:train_size+val_size]
+            self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
+            self.cached_faces = data[f'faces'][train_size:train_size+val_size]
+            self.labels = data[f'labels'][train_size:train_size+val_size]
+        elif split == "test":
+            self.extra_features = data[f'features'][train_size+val_size:]
+            self.cached_vertices = data[f'vertices'][train_size+val_size:]
+            self.cached_faces = data[f'faces'][train_size+val_size:]
+            self.labels = data[f'labels'][train_size+val_size:]
+
+
+    def get_feature(self, idx):
+        vertices = self.cached_vertices[idx]
+        faces = self.cached_faces[idx]
+        extra_features = self.extra_features[idx]
+        target = self.labels[idx]
+        face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)
+        triangles = vertices[faces, :].reshape(-1,9)
+        features = np.hstack([triangles, extra_features])
+        return features, target, face_neighborhood
+
+    def get(self, idx):
+        features, target, face_neighborhood = self.get_feature(idx)
+        return GeometricData(x=torch.from_numpy(features).float(), y=target,
+                             edge_index=torch.from_numpy(face_neighborhood.T).long(),
+                             )
+
+    def len(self):
+        return len(self.cached_vertices)
+
 
 class FPTriangleNodes(GeometricDataset):
     def __init__(self, config, split,scale_augment=False,shift_augment=False):

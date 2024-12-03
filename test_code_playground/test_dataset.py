@@ -5,7 +5,7 @@ import trimesh
 from trimesh.exchange import obj
 import numpy as np
 from dataset import sort_vertices_and_faces
-from dataset.floorplan_triangles import FPTriangleNodes
+from dataset.floorplan_triangles import FPTriangleNodes,FPOriginTriangleNodes
 import hydra
 
 from util.misc import scale_vertices, normalize_vertices, shift_vertices
@@ -19,8 +19,11 @@ def main(config):
     if not os.path.exists(augmentation_data_root):
         os.makedirs(augmentation_data_root)
     dataset = FPTriangleNodes(config, 'train')
-    for id ,data in enumerate(dataset):
-        print(id)
+    data = dataset.get(0)
+    print(data.x.shape)
+    dataset = FPOriginTriangleNodes(config, 'train')
+    data = dataset.get(0)
+    print(data.x.shape)
     #dataset.save_sample_data_by_idx(0,True)
 
 

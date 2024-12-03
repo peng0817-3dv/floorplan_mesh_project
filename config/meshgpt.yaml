@@ -92,6 +92,10 @@ hydra:
   run:
     dir: .
 
+# inference settings
+load_checkpoint_path:
+save_inference_path: None # if None, will save to the same directory as the loaded checkpoint
+
 
 # FT settings
 num_cls: 32
