@@ -93,8 +93,8 @@ hydra:
     dir: .
 
 # inference settings
-load_checkpoint_path:
-save_inference_path: None # if None, will save to the same directory as the loaded checkpoint
+load_checkpoint_path: "./test"
+save_inference_path:  # if None, will save to the same directory as the loaded checkpoint
 
 
 # FT settings

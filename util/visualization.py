@@ -79,7 +79,8 @@ def plot_vertices_and_faces(vertices, faces, output_path):
 
 
 def plot_vertices_and_faces_with_labels(vertices, faces, labels,output_path):
-    ngons = [[vertices[v, :].tolist() for v in f] for f in faces]
+    # ngons = [[vertices[v, :].tolist() for v in f] for f in faces]
+    ngons = np.array([[vertices[face[0]][:2], vertices[face[1]][:2], vertices[face[2]][:2]] for face in faces])
     attribute = np.array(labels)
     tris = PolyCollection(ngons, array=attribute, cmap='RdYlGn')
     fig, ax = plt.subplots()

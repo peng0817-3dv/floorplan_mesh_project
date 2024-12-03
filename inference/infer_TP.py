@@ -20,18 +20,19 @@ def main(config):
         os.makedirs(predict_path_root)
 
     dataset = FPTriangleNodes(config,'test')
-    model = TriangleTokenizationGraphConv(config)
-    # model = TriangleTokenizationGraphConv.load_from_checkpoint(checkpoint_path=checkpoint_path)
+    # model = TriangleTokenizationGraphConv(config)
+    model = TriangleTokenizationGraphConv.load_from_checkpoint(checkpoint_path=load_checkpoint_path)
     model.eval()
     progress_bar = tqdm(total = len(dataset),desc="Inference")
-    for idx,data in dataset:
-        # data = dataset.get(0)
+    for idx in range(len(dataset)):
+        data = dataset.get(idx)
         # print(data.batch_size)
-        _, _, vertices, faces, _ = dataset.get_all_features_for_shape(index=0)
+        _, _, vertices, faces, _ = dataset.get_all_features_for_shape(idx)
         predict = model.inference_data(data)
-        plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces,\
+        if idx % 10 == 0:
+            plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces,\
                                             labels=predict,output_file=os.path.join(predict_path_root, f"test_{idx}.png"))
-        progress_bar.update(idx)
+        progress_bar.update(1)
 
 if __name__ == '__main__':
     main()
