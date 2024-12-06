@@ -14,6 +14,7 @@ from dataset import newface_token, stopface_token, padface_token
 import shapefile
 
 
+
 # 约定-平面shp文件夹下各子文件的文件名
 DATA_VERTICE_FILENAME = "vertexes.shp"
 DATA_EDGE_FILENAME = "edges.shp"
