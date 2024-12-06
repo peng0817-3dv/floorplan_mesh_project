@@ -1,0 +1,113 @@
+# data
+dataset: 'shapenet'
+dataset_root: 'G:/workspace_plane2DDL/RefCode/meshgpt-official-version/MeshGPT/data/structure3d'
+# not actually number of tokens, but the quantization resolution + 3
+num_tokens: 131
+train_ratio: 0.7
+val_ratio: 0.2
+test_ratio: 0.1
+
+gradient_accumulation_steps: 32 # used to simulate larger batch sizes
+batch_size: 2 # if gradient_accumulation_steps > 1, this is the micro-batch size
+block_size: 4608 # context_size of the transformer, for good performance block_size > max sequence length
+padding: 0.0  # fraction of padding allowed, when sequences are beyond the transformer context size
+
+scale_augment: True  # augment shapes by random scaling
+scale_augment_val: False  # augment val shapes by random scaling
+
+shift_augment: True  # augment shapes by shifting them in space
+shift_augment_val: False
+
+wandb_main: False # set to true to log to main board rather than debug board
+suffix: ''  # suffix for project name in wandb, if wandb_main is false, auto populated to dump debug experiments to a different project
+experiment: add_transformer  # experiment name
+seed: null
+save_epoch: 1  # save every n epoch
+sanity_steps: 0  # sanity steps before the run
+val_check_percent: 1.0  # check this proportion of val set when evaluation runs
+val_check_interval: 1  # run evaluation every x% of the train set steps
+resume: null  # resume from a checkpoint
+num_workers: 4
+logger: none
+overfit: False  # overfitting dataloaders
+
+num_val_samples: 16  # number of meshes to visualize in evaluation
+max_val_tokens: 5000
+top_k_tokens: 200  # sampling top-k tokens
+top_p: 0.9  # p val for nucleus sampling
+temperature: 0.8  # temprature for sampling
+sequence_stride: 32  # use when sequences are larger than context length
+use_smoothed_loss: False  # smoothing over neighboring tokens in the quantized space
+
+use_point_feats: False  # point net like point features in graph network
+graph_conv: sage  # flavor of graph convs
+g_no_max_pool: True  # no max pooling in graph conv
+g_aggr: mean  # aggregation op in graph conv
+ce_output: True   # use quantized predictions
+embed_dim: 192   # vq embed dim
+n_embed: 16384  # vq num embeddings
+embed_loss_weight: 1.0
+embed_levels: 2  # rvq levels
+tri_weight: 0.00  # weight on geometric predictions
+norm_weight: 0.00
+area_weight: 0.00
+angle_weight: 0.00
+code_decay: 0.99  # code decay for vq
+embed_share: True  # share embeddings across rvq levels
+use_multimodal_loss: True  # multiple modes in ce loss when training vocabulary
+
+vq_resume: null  # path to trained vocab when training the transformer
+ft_resume: null  # path to transformer trained on all categories when finetuning
+ft_category: null  # shapenet category to finetune
+distribute_features: True  # distribute face features across vertices
+low_augment: False  # lower the scale of augmentation
+
+# model
+model:
+  in_emb: 3
+  n_layer: 24
+  n_head: 16
+  n_embd: 768
+  dropout: 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+  bias: False # do we use bias inside LayerNorm and Linear layers?
+
+# adamw optimizer
+lr: 1e-4 # max learning rate
+force_lr: null
+max_epoch: 2000 # total number of training iterations
+weight_decay: 1e-1
+beta1: 0.9
+beta2: 0.95
+grad_clip: 1.0 # clip gradients at this value, or disable if == 0.0
+
+# learning rate decay settings
+warmup_steps: 2000 # how many steps to warm up for
+min_lr: 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+
+only_chairs: False
+stochasticity: 0.1
+
+hydra:
+  output_subdir: null # Disable saving of config files. We'll do that ourselves.
+  run:
+    dir: .
+
+# inference settings
+load_checkpoint_path: "./test"
+save_inference_path:  # if None, will save to the same directory as the loaded checkpoint
+
+
+# FT settings
+num_cls: 32
+
+# Transformer settings
+attn_encoder_depth: 2
+use_linear_attn: True
+local_attn_dim_head: 32
+local_attn_heads: 8
+linear_attn_dim_head: 8
+linear_attn_heads: 16
+local_attn_window_size: 64
+attn_dropout: 0.0
+ff_dropout: 0.0
+
