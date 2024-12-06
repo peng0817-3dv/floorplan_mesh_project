@@ -405,3 +405,89 @@ class FPTriangleNodesDataloader(torch.utils.data.DataLoader):
             collate_fn=FaceCollator(follow_batch, exclude_keys),
             **kwargs,
         )
+
+
+class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
+    def __init__(self, config, split, scale_augment=False, shift_augment=False):
+        super().__init__(config, split, scale_augment, shift_augment)
+
+    def get_all_features_for_shape(self, idx):
+        vertices = self.cached_vertices[idx]
+        faces = self.cached_faces[idx]
+        confidence = self.extra_features[idx]
+        labels = self.labels[idx]
+        if self.scale_augment:
+            if self.low_augment:
+                x_lims = (0.9, 1.1)
+                y_lims = (0.9, 1.1)
+                z_lims = (0.9, 1.1)
+            else:
+                x_lims = (0.75, 1.25)
+                y_lims = (0.75, 1.25)
+                z_lims = (0.75, 1.25)
+            vertices = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
+        vertices = normalize_vertices(vertices)
+        if self.shift_augment:
+            vertices = shift_vertices(vertices)
+        # 注意该排序会同时做离散化操作
+        vertices, faces,labels,confidence = \
+            sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.num_tokens)
+        triangles = vertices[faces, :]
+        # triangles, normals, areas, angles, vertices, faces = create_feature_stack(vertices, faces, self.num_tokens)
+        triangles, areas, angles = create_feature_stack_from_triangles(triangles)
+
+        features = np.hstack([triangles, confidence, areas, angles])
+        face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
+        target = torch.from_numpy(labels).long() - 1
+        return features, target, vertices, faces, face_neighborhood
+
+
+def normal(triangles):
+    # The cross product of two sides is a normal vector
+    if torch.is_tensor(triangles):
+        return torch.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0], dim=1)
+    else:
+        return np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0], axis=1)
+
+
+def area(triangles):
+    # The norm of the cross product of two sides is twice the area
+    if torch.is_tensor(triangles):
+        return torch.norm(normal(triangles), dim=1) / 2
+    else:
+        return np.linalg.norm(normal(triangles), axis=1) / 2
+
+
+def angle(triangles):
+    v_01 = triangles[:, 1] - triangles[:, 0]
+    v_02 = triangles[:, 2] - triangles[:, 0]
+    v_10 = -v_01
+    v_12 = triangles[:, 2] - triangles[:, 1]
+    v_20 = -v_02
+    v_21 = -v_12
+    if torch.is_tensor(triangles):
+        return torch.stack([angle_between(v_01, v_02), angle_between(v_10, v_12), angle_between(v_20, v_21)], dim=1)
+    else:
+        return np.stack([angle_between(v_01, v_02), angle_between(v_10, v_12), angle_between(v_20, v_21)], axis=1)
+
+
+def angle_between(v0, v1):
+    v0_u = unit_vector(v0)
+    v1_u = unit_vector(v1)
+    if torch.is_tensor(v0):
+        return torch.arccos(torch.clip(torch.einsum('ij,ij->i', v0_u, v1_u), -1.0, 1.0))
+    else:
+        return np.arccos(np.clip(np.einsum('ij,ij->i', v0_u, v1_u), -1.0, 1.0))
+
+
+def unit_vector(vector):
+    if torch.is_tensor(vector):
+        return vector / (torch.norm(vector, dim=-1)[:, None] + 1e-8)
+    else:
+        return vector / (np.linalg.norm(vector, axis=-1)[:, None] + 1e-8)
+
+
+def create_feature_stack_from_triangles(triangles):
+    t_areas = area(triangles) * 1e3
+    t_angles = angle(triangles) / float(np.pi)
+    return triangles.reshape(-1, 9), t_areas.reshape(-1, 1), t_angles.reshape(-1, 3)
