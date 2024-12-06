@@ -75,7 +75,7 @@ class WithoutPE(pl.LightningModule):
         self.manual_backward(loss)
         # accumulate gradients of `n` batches
         if (batch_idx + 1) % self.config.gradient_accumulation_steps == 0:
-            step(optimizer, [self.encoder, self.decoder, self.pre_quant, self.post_quant])
+            step(optimizer, [self.encoder, self.decoder, self.post_quant])
             optimizer.zero_grad(set_to_none=True)  # type: ignore
         self.log("lr", optimizer.param_groups[0]['lr'], on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)  # type: ignore
 

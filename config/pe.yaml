@@ -20,7 +20,7 @@ shift_augment_val: False
 
 wandb_main: False # set to true to log to main board rather than debug board
 suffix: ''  # suffix for project name in wandb, if wandb_main is false, auto populated to dump debug experiments to a different project
-experiment: snet  # experiment name
+experiment: pe  # experiment name
 seed: null
 save_epoch: 1  # save every n epoch
 sanity_steps: 0  # sanity steps before the run
