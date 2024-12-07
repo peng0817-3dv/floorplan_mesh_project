@@ -89,7 +89,7 @@ class AddTransformer(pl.LightningModule):
         encoded_x = self.encoder(data.x, data.edge_index, data.batch)
         encoded_x = self.post_quant(encoded_x)
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, data.batch, self.config.batch_size)
-        encoded_x_conv = self.transformer(encoded_x,conv_mask)
+        encoded_x_conv = self.transformer(encoded_x_conv,conv_mask)
         decoded_x_conv = self.decoder(encoded_x_conv)
 
         decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-1])[conv_mask, :] # num_triangles x num_cls(32)
@@ -108,7 +108,7 @@ class AddTransformer(pl.LightningModule):
         encoded_x = self.encoder(data.x.to(self.device), data.edge_index.to(self.device), torch.zeros([data.x.shape[0]],device=self.device).long())
         encoded_x = self.post_quant(encoded_x)
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, torch.zeros([data.x.shape[0]], device=self.device).long(), 1)
-        encoded_x_conv = self.transformer(encoded_x,conv_mask)
+        encoded_x_conv = self.transformer(encoded_x_conv,conv_mask)
         decoded_x_conv = self.decoder(encoded_x_conv)
         decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-1])[conv_mask, :]
         predict_labels = decoded_x.argmax(-1).reshape(-1)
