@@ -31,9 +31,9 @@ def main(config):
         predict = model.inference_data(data)
         if idx % 10 == 0:
             plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces,\
-                                            labels=predict,output_file=os.path.join(predict_path_root, f"test_{idx}.png"))
+                                            labels=predict,output_path=os.path.join(predict_path_root, f"test_{idx}.png"))
             export_mesh_to_shp(vertices=vertices, faces=faces,\
-                               labels=predict,output_file=os.path.join(predict_path_root, f"test_{idx}_shpfile"))
+                               labels=predict,output_path=os.path.join(predict_path_root, f"test_{idx}_shpfile"))
         progress_bar.update(1)
 
 if __name__ == '__main__':
