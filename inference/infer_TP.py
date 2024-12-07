@@ -4,7 +4,7 @@ import hydra
 from tqdm import tqdm
 
 from trainer.train_vocabulary import TriangleTokenizationGraphConv,FPTriangleNodes,FPTriangleNodesDataloader
-from util.visualization import plot_vertices_and_faces_with_labels
+from util.visualization import plot_vertices_and_faces_with_labels, export_mesh_to_shp
 
 @hydra.main(config_path='../config', config_name='meshgpt', version_base='1.2')
 def main(config):
@@ -32,6 +32,8 @@ def main(config):
         if idx % 10 == 0:
             plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces,\
                                             labels=predict,output_file=os.path.join(predict_path_root, f"test_{idx}.png"))
+            export_mesh_to_shp(vertices=vertices, faces=faces,\
+                               labels=predict,output_file=os.path.join(predict_path_root, f"test_{idx}_shpfile"))
         progress_bar.update(1)
 
 if __name__ == '__main__':
