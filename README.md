@@ -47,61 +47,54 @@ Overall code structure is as follows:
 | `trainer/`             | pytorch-lightning module for training                                                        | 
 | `util/`                | misc utilities for positional encoding, visualization, logging etc.                      |
 
-## Pre-trained Models and Data
 
-Download the pretrained models and the data from [here](https://drive.google.com/drive/folders/1Gzuxn6c1pguvRWrsedmCa9xKtest8aC2?usp=drive_link). Place them in the project, such that trained models are in `pretrained/` directory and data is in `data/shapenet` directory. 
+## Training
+
+For launching training, use the following command from project root.
+And because we change the code for training in structured3d dataset,the code in this branch is not compatible with the original code.
+we need to specify the dataset path in the config file(config/meshgpt.yaml) or use the command line arguments.
+
+the "dataset_root" means the directory where the scenes data are stored.
+like:
+
+```python
+dataset_root
+--|--scene0000
+--|--|--vertices.shp
+--|--|--faces.shp
+--|--|--edges.shp
+--|--scene0001
+--|--|--vertices.shp
+--|--|--faces.shp
+--|--|--edges.shp
+--|--...
+```
+
+```
+# only for structured3d 
+python trainer/train_vocabulary.py <options> dataset_root=<path_to_dataset_root>
+```
+
+After first loading the dataset, the cache file will be saved in the directory of the dataset root as "cache.pkl".
 
 ### Running inference
 
-To run inference use the following command
+To run inference use the following command.We need to specify the checkpoint path or specify it in the config file(config/meshgpt.yaml).
+
+You can find the checkpoint path in the "runs/<experiment_name>/checkpoints/<checkpoint_number>.ckpt".
+And the result will be saved in the "runs/<experiment_name>/checkpoints/from_checkpoint_<checkpoint_number>/" directory.
 
 ```bash
-python inference/infer_meshgpt.py <ckpt_path> <sampling_mode> <num_samples>
+python inference/infer_meshgpt.py  load_checkpoint_path=<ckpt_path> 
 ```
 
 Examples:
 
 ```bash
-# for chairs
-python inference/infer_meshgpt.py pretrained/transformer_ft_03001627/checkpoints/2287-0.ckpt beam 25
-
-# for tables
-python inference/infer_meshgpt.py pretrained/transformer_ft_04379243/checkpoints/1607-0.ckpt beam 25
+python inference/infer_meshgpt.py laod_checkpoint_path=runs/transformer_ft_03001627/checkpoints/2287-0.ckpt
 ```
 
-## Training
 
-For launching training, use the following command from project root
-
-```
-# vocabulary
-python trainer/train_vocabulary.py <options> vq_resume=<path_to_vocabulary_ckpt>
-
-# transformer
-python trainer/train_transformer.py <options> vq_resume=<path_to_vocabulary_ckpt> ft_category=<category_id> ft_resume=<path_to_base_transformer_ckpt>
-```
-
-Some example trainings:
-
-#### Vocabulary training
-```bash
-python trainer/train_vocabulary.py batch_size=32 shift_augment=True scale_augment=True wandb_main=True experiment=vq128 val_check_percent=1.0 val_check_interval=5 overfit=False max_epoch=2000 only_chairs=False use_smoothed_loss=True graph_conv=sage use_point_feats=False num_workers=24 n_embed=16384 num_tokens=131 embed_levels=2 num_val_samples=16 use_multimodal_loss=True weight_decay=0.1 embed_dim=192 code_decay=0.99 embed_share=True distribute_features=True
-```
-#### Base transformer training
-```bash 
-
-# run over multiple GPUs (recommended GPUs >= 8), if you have a good budget, can use higher gradient_accumulation_steps
-
-python trainer/train_transformer.py wandb_main=True batch_size=8 gradient_accumulation_steps=8 max_val_tokens=5000 max_epoch=2000 sanity_steps=0 val_check_interval=1 val_check_percent=1 block_size=4608 model.n_layer=24 model.n_head=16 model.n_embd=768 model.dropout=0 scale_augment=True shift_augment=True num_workers=24 experiment=bl4608-GPT2_m24-16-768-0_b8x8x8_lr1e-4 use_smoothed_loss=True num_tokens=131 vq_resume=<path_to_vocabulary_ckpt> padding=0
-```
-#### Transformer finetuning
-```bash
-
-# run over multiple GPUs (recommended GPUs >= 8), if you have a good budget, can use higher gradient_accumulation_steps
-
-python trainer/train_transformer.py wandb_main=True batch_size=8 gradient_accumulation_steps=8 max_val_tokens=5000 max_epoch=2400 sanity_steps=0 val_check_interval=8 val_check_percent=1 block_size=4608 model.n_layer=24 model.n_head=16 model.n_embd=768 model.dropout=0 scale_augment=True shift_augment=True num_workers=24 experiment=bl4608-GPT2_m24-16-768-0_b8x8x8_FT04379243 use_smoothed_loss=True num_tokens=131 vq_resume=<path_to_vocabulary_ckpt> padding=0 num_val_samples=4 ft_category=04379243 ft_resume=<path_to_base_transformer_ckpt> warmup_steps=100
-
-```
 
 ## License
 <a property="dct:title" rel="cc:attributionURL" href="https://nihalsid.github.io/mesh-gpt/">MeshGPT: Generating Triangle Meshes with Decoder-Only Transformers</a> by <a rel="cc:attributionURL dct:creator" property="cc:attributionName" href="https://nihalsid.github.io/">Mohd Yawar Nihal Siddiqui</a> is licensed under [Automotive Development Public Non-Commercial License Version 1.0](LICENSE), however portions of the project are available under separate license terms: e.g. NanoGPT code is under MIT license.
