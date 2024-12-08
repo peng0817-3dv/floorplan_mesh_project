@@ -54,8 +54,7 @@ For launching training, use the following command from project root.
 And because we change the code for training in structured3d dataset,the code in this branch is not compatible with the original code.
 we need to specify the dataset path in the config file(config/meshgpt.yaml) or use the command line arguments.
 
-the "dataset_root" means the directory where the scenes data are stored.
-like:
+the "dataset_root" means the directory where the scenes data are stored,like:
 
 ```python
 dataset_root
