@@ -250,6 +250,8 @@ class FPTriangleNodes(GeometricDataset):
         self.cached_vertices = []
         self.cached_faces = []
         self.extra_features = []
+        self.labels = []
+        self.names = []
         # self.only_backward_edges = only_backward_edges
         self.num_tokens = config.num_tokens
         self.scale_augment = scale_augment
@@ -263,7 +265,7 @@ class FPTriangleNodes(GeometricDataset):
                 data = pickle.load(f)
             print(f"load data from cache,cache path:{data_cache_path}")
         else:
-            data = {"features": [], "vertices": [], "faces": [], "labels": []}
+            data = {"features": [], "vertices": [], "faces": [], "labels": [],"names": []}
             for scene_name in tqdm(os.listdir(data_path)):
                 scene_full_path = os.path.join(data_path, scene_name)
                 vertices, faces, face_feature, labels = read_vertexes_and_faces(scene_full_path)
@@ -271,6 +273,7 @@ class FPTriangleNodes(GeometricDataset):
                 data["vertices"].append(vertices)
                 data["faces"].append(faces)
                 data["labels"].append(labels)
+                data["names"].append(scene_name)
             with open(data_cache_path, "wb") as f:
                 pickle.dump(data,f)
 
@@ -282,16 +285,19 @@ class FPTriangleNodes(GeometricDataset):
             self.cached_vertices = data[f'vertices'][:train_size]
             self.cached_faces = data[f'faces'][:train_size]
             self.labels = data[f'labels'][:train_size]
+            self.names = data[f'names'][:train_size]
         elif split == "val":
             self.extra_features = data[f'features'][train_size:train_size+val_size]
             self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
             self.cached_faces = data[f'faces'][train_size:train_size+val_size]
             self.labels = data[f'labels'][train_size:train_size+val_size]
+            self.names = data[f'names'][train_size:train_size+val_size]
         elif split == "test":
             self.extra_features = data[f'features'][train_size+val_size:]
             self.cached_vertices = data[f'vertices'][train_size+val_size:]
             self.cached_faces = data[f'faces'][train_size+val_size:]
             self.labels = data[f'labels'][train_size+val_size:]
+            self.names = data[f'names'][train_size+val_size:]
 
         if split == "train":
             self.data_augmentation()
@@ -300,6 +306,10 @@ class FPTriangleNodes(GeometricDataset):
 
     def len(self):
         return len(self.cached_vertices)
+
+    def get_name(self, idx):
+        return self.names[idx]
+
 
     def get_all_features_for_shape(self, idx):
         vertices = self.cached_vertices[idx]
@@ -416,6 +426,8 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
         self.cached_vertices = []
         self.cached_faces = []
         self.extra_features = []
+        self.labels = []
+        self.names = []
         # self.only_backward_edges = only_backward_edges
         self.num_tokens = config.num_tokens
         self.scale_augment = scale_augment
@@ -429,7 +441,7 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
                 data = pickle.load(f)
             print(f"load data from cache,cache path:{data_cache_path}")
         else:
-            data = {"features": [], "vertices": [], "faces": [], "labels": []}
+            data = {"features": [], "vertices": [], "faces": [], "labels": [],"names": []}
             for scene_name in tqdm(os.listdir(data_path)):
                 scene_full_path = os.path.join(data_path, scene_name)
                 if not os.path.isdir(scene_full_path):
@@ -439,6 +451,7 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
                 data["vertices"].append(vertices)
                 data["faces"].append(faces)
                 data["labels"].append(labels)
+                data["names"].append(scene_name)
             with open(data_cache_path, "wb") as f:
                 pickle.dump(data,f)
 
@@ -450,20 +463,24 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
             self.cached_vertices = data[f'vertices'][:train_size]
             self.cached_faces = data[f'faces'][:train_size]
             self.labels = data[f'labels'][:train_size]
+            self.names = data[f'names'][:train_size]
         elif split == "val":
             self.extra_features = data[f'features'][train_size:train_size+val_size]
             self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
             self.cached_faces = data[f'faces'][train_size:train_size+val_size]
             self.labels = data[f'labels'][train_size:train_size+val_size]
+            self.names = data[f'names'][train_size:train_size+val_size]
         elif split == "test":
             self.extra_features = data[f'features'][train_size+val_size:]
             self.cached_vertices = data[f'vertices'][train_size+val_size:]
             self.cached_faces = data[f'faces'][train_size+val_size:]
             self.labels = data[f'labels'][train_size+val_size:]
+            self.names = data[f'names'][train_size+val_size:]
 
         if split == "train":
             self.data_augmentation()
         print(len(self.cached_vertices), "meshes loaded loading for", split)
+
 
 
     def get_all_features_for_shape(self, idx):
