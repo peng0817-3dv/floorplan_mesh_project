@@ -26,7 +26,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         self.save_hyperparameters()
 
         # 数据集的构建
-        #self.train_dataset = TriangleNodesWithFaces(config, 'train', config.scale_augment, config.shift_augment, None)
+        # self.train_dataset = TriangleNodesWithFaces(config, 'train', config.scale_augment, config.shift_augment, None)
         self.train_dataset = FPTriangleNodes(config, 'train', config.scale_augment, config.shift_augment)
         # self.interesting_categories = [('02828884', '_bench'), ('02871439', '_bookshelf'), ('03001627', ""), ('03211117', '_display'), ('04379243', '_table')]
         # self.val_datasets = []

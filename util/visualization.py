@@ -10,7 +10,7 @@ from matplotlib.collections import PolyCollection
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from dataset import newface_token, stopface_token, padface_token
+from dataset import newface_token, stopface_token, padface_token, sort_vertices_and_faces_and_labels_and_features
 import shapefile
 
 
@@ -26,6 +26,7 @@ PROPERTY_FACE_P0 = "pnt0"  # 三角面的顶点1的序号
 PROPERTY_FACE_P1 = "pnt1"  # 三角面的顶点2的序号
 PROPERTY_FACE_P2 = "pnt2"  # 三角面的顶点3的序号
 PROPERTY_FACE_LABEL = "label"  # 面片label
+
 
 def visualize_points(points, vis_path, colors=None):
     if colors is None:
@@ -241,6 +242,12 @@ def tokens_to_mesh(vertices_q, face_sequence, num_tokens):
     if len(current_face) != 0:
         faces.append(current_face)
     return vertices, faces
+
+
+def visualize_discrete_mesh(vertices, faces, labels, features, output_path,discrete = 128):
+    vertices,faces,labels,features = \
+        sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, features,discrete)
+    plot_vertices_and_faces_with_labels(vertices, faces, labels, output_path)
 
 
 def ngon_to_obj(vertices, faces):

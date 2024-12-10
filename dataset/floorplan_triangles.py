@@ -258,7 +258,6 @@ class FPTriangleNodes(GeometricDataset):
         self.shift_augment = shift_augment
         self.low_augment = config.low_augment
 
-
         data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
         if os.path.exists(data_cache_path):
             with open(data_cache_path, "rb") as f:
