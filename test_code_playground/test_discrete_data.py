@@ -1,84 +1,53 @@
 import os
+import shutil
 
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.collections import PolyCollection
 from matplotlib.colors import LinearSegmentedColormap
 from tqdm import tqdm
+import openpyxl
+import pandas as pd
 
 from dataset import sort_vertices_and_faces_and_labels_and_features
-from dataset.floorplan_triangles import read_vertexes_and_faces
+from dataset.floorplan_triangles import read_s3d_mesh_info
 from util.misc import normalize_vertices
+from util.s3d_data_load import global_label_colors
 
 DATASET_ROOT = 'G:/workspace_plane2DDL/bound_gen_tri_shp'
 VISUALIZE_ROOT = 'discrete_data'
-
-colors = [
-'#e7c9b7',
-'#5c6bc0',
-'#ff5733',
-'#1e88e5',
-'#cddc39',
-'#f06292',
-'#ffa726',
-'#9c27b0',
-'#81c784',
-'#64b5f6',
-'#ffb74d',
-'#90caf9',
-'#78909c',
-'#ffecb3',
-'#a1887f',
-'#d32f2f',
-'#1976d2',
-'#388e3c',
-'#7e57c2',
-'#fb8c00',
-'#f44336',
-'#26a69a',
-'#f48fb1',
-'#ffb300',
-'#e57373',
-'#64dd17',
-'#ffcc80',
-'#8e24aa',
-'#7b1fa2',
-'#e1bee7',
-'white',
-'black'
-]
-
-label_names = [
-'living_room' ,
-'kitchen',
-'bedroom',
-'bathroom',
-'balcony',
-'corridor',
-'dining_room',
-'study',
-'studio',
-'store_room',
-'garden',
-'laundry_room',
-'office',
-'basement',
-'garage',
-'undefined',
-'door',
-'window',
-'out_wall',
-'in_wall'
-]
+CLEAN_RECORD = 'G:/workspace_plane2DDL/bound_gen_tri_shp/clean_record.xlsx'
 
 
+right_type = ['正确']
+
+
+def clean_dataset_by_clean_record(record_csv_path):
+    data = pd.read_excel(record_csv_path)
+    clean_dataset_root = os.path.join( os.path.dirname(DATASET_ROOT),'cleaned_dataset' )
+    progress_bar = tqdm(total=len(os.listdir(DATASET_ROOT)))
+    if not os.path.exists(clean_dataset_root):
+        os.makedirs(clean_dataset_root)
+
+    for scene_name in os.listdir(DATASET_ROOT):
+        if not os.path.isdir(os.path.join(DATASET_ROOT, scene_name)):
+            continue
+        scene_path = os.path.join(DATASET_ROOT, scene_name)
+        scene_num = int(scene_name.split('_')[1])
+        clean_record = data.loc[scene_num].values
+        if clean_record[1] in right_type:
+            target_path = os.path.join(clean_dataset_root, scene_name)
+            if os.path.exists(target_path):
+                shutil.rmtree(target_path)
+            shutil.copytree(scene_path, target_path)
+        progress_bar.update(1)
 
 
 def main():
     if not os.path.exists(VISUALIZE_ROOT):
         os.makedirs(VISUALIZE_ROOT)
 
-    custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', colors, N=len(colors))
+    custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', global_label_colors, N=len(global_label_colors))
     progress_bar = tqdm(total=len(os.listdir(DATASET_ROOT)))
     # count = 1
     for scene_name in os.listdir(DATASET_ROOT):
@@ -89,7 +58,7 @@ def main():
         # if count < 0:
         #     break
         scene_path = os.path.join(DATASET_ROOT, scene_name)
-        v, f, features, labels = read_vertexes_and_faces(scene_path)
+        v, f, features, labels = read_s3d_mesh_info(scene_path)
         v = normalize_vertices(v)
 
         v_d128,f_d128,labels_d128,_ = sort_vertices_and_faces_and_labels_and_features(v,f,labels,features,128)
@@ -146,4 +115,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    clean_dataset_by_clean_record(CLEAN_RECORD)
