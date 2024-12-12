@@ -99,3 +99,4 @@ save_inference_path:  # if None, will save to the same directory as the loaded c
 
 # FT settings
 num_cls: 32
+ce_weight: {'outer wall':0.2, 'inner wall':0.2, 'room':1.0}

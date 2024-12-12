@@ -56,14 +56,18 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         self.register_buffer('smoothing_weight', torch.tensor([2, 10, 200, 10, 2], dtype=torch.float32).unsqueeze(0).unsqueeze(0))
         # print('compiling model...')
         # self.model = torch.compile(model)  # requires PyTorch 2.0
-        self.output_dir_image_val = Path(f'runs/{self.config.experiment}/image_val')
-        self.output_dir_image_val.mkdir(exist_ok=True, parents=True)
-        self.output_dir_mesh_val = Path(f'runs/{self.config.experiment}/mesh_val')
-        self.output_dir_mesh_val.mkdir(exist_ok=True, parents=True)
-        self.output_dir_image_train = Path(f'runs/{self.config.experiment}/image_train')
-        self.output_dir_image_train.mkdir(exist_ok=True, parents=True)
-        self.output_dir_mesh_train = Path(f'runs/{self.config.experiment}/mesh_train')
-        self.output_dir_mesh_train.mkdir(exist_ok=True, parents=True)
+        # self.output_dir_image_val = Path(f'runs/{self.config.experiment}/image_val')
+        # self.output_dir_image_val.mkdir(exist_ok=True, parents=True)
+        # self.output_dir_mesh_val = Path(f'runs/{self.config.experiment}/mesh_val')
+        # self.output_dir_mesh_val.mkdir(exist_ok=True, parents=True)
+        # self.output_dir_image_train = Path(f'runs/{self.config.experiment}/image_train')
+        # self.output_dir_image_train.mkdir(exist_ok=True, parents=True)
+        # self.output_dir_mesh_train = Path(f'runs/{self.config.experiment}/mesh_train')
+        # self.output_dir_mesh_train.mkdir(exist_ok=True, parents=True)
+        weight = [config.ce_weight['room']] * (config.num_cls - 2)
+        weight.append(config.ce_weight['outer wall'])
+        weight.append(config.ce_weight['inner wall'])
+        self.ce_loss_weight = weight
         self.automatic_optimization = False
         self.distribute_features_fn = distribute_features if self.config.distribute_features else dummy_distribute
         # 初始化结束，可视化一下真实数据
@@ -126,10 +130,12 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
                     loss = loss * 0.1 + torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), starget_b).mean()
                 else:
                     starget = torch.nn.functional.normalize(starget, p=1.0, dim=-1, eps=1e-12).squeeze(1)
-                    loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), starget).mean()
+                    loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), starget,weight=self.ce_loss_weight).mean()
             else:
-
-                loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1), reduction='mean')
+                weights = torch.tensor(self.ce_loss_weight, device=self.device)
+                # 实际运行
+                loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1), \
+                                                         reduction='mean', weight=weights)
             # 计算 cross entropy loss 完毕
             # y_coords = data.y / (self.config.num_tokens - 3) - 0.5
             # loss_tri = torch.nn.functional.mse_loss(decoded_tri, y_coords, reduction='mean')
@@ -162,7 +168,7 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
         self.manual_backward(loss)
         # accumulate gradients of `n` batches
         if (batch_idx + 1) % self.config.gradient_accumulation_steps == 0:
-            step(optimizer, [self.encoder, self.decoder, self.pre_quant, self.post_quant])
+            step(optimizer, [self.encoder, self.decoder, self.post_quant])
             optimizer.zero_grad(set_to_none=True)  # type: ignore
         self.log("lr", optimizer.param_groups[0]['lr'], on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)  # type: ignore
 
@@ -184,7 +190,8 @@ class TriangleTokenizationGraphConv(pl.LightningModule):
             # decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-2], decoded_x_conv.shape[-1])[conv_mask, :, :]
             decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-1])[conv_mask, :] # num_triangles x num_cls(32)
             # decoded_c = softargmax(decoded_x) / (self.config.num_tokens - 3) - 0.5
-            loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1), reduction='mean')
+            weights = torch.tensor(self.ce_loss_weight,device=self.device)
+            loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1),weight=weights, reduction='mean')
             # y_coords = data.y / (self.config.num_tokens - 3) - 0.5
             # loss_c = torch.nn.functional.mse_loss(decoded_c, y_coords, reduction='mean')
         else:

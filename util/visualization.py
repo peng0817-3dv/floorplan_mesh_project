@@ -113,7 +113,6 @@ def export_mesh_to_obj(vertices, faces, output_path):
 
 
 def export_mesh_to_shp(vertices,faces,labels,output_path):
-    # TODO: 可视化为shp文件
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 

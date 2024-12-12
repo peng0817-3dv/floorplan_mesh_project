@@ -61,19 +61,3 @@ def random_split(size, train_ratio, val_ratio):
     return [train_idx, val_idx, test_idx]
 
 
-if __name__ == '__main__':
-
-    dataset_root = "../data/structure3d"
-    label_datas = []
-    n = 0
-    for scene in os.listdir(dataset_root):
-        if not os.path.isdir(os.path.join(dataset_root, scene)):
-            continue
-        mesh_info_path = os.path.join(dataset_root, scene)
-        _,_,_,label = read_s3d_mesh_info(mesh_info_path)
-        label_datas.append(label)
-        n += 1
-    sequence_split = [range(n)[0,int(n * 0.7)],range(n)[int(n * 0.7):int(n * 0.9)],range(n)[int(n * 0.9):]]
-    rd_split = random_split(n, 0.7, 0.2)
-    analyse_dataset_split(rd_split, label_datas, analyse_results_path = "random_split_3500.png")
-    analyse_dataset_split(sequence_split, label_datas, analyse_results_path = "sequence_split_3500.png")
