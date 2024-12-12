@@ -7,13 +7,14 @@ from pathlib import Path
 import trimesh
 from PIL import Image
 from matplotlib.collections import PolyCollection
+from matplotlib.colors import LinearSegmentedColormap
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from dataset import newface_token, stopface_token, padface_token, sort_vertices_and_faces_and_labels_and_features
 import shapefile
 
-
+from util.s3d_data_load import global_label_colors
 
 # 约定-平面shp文件夹下各子文件的文件名
 DATA_VERTICE_FILENAME = "vertexes.shp"
@@ -99,7 +100,8 @@ def plot_vertices_and_faces_with_labels(vertices, faces, labels,output_path):
     # ngons = [[vertices[v, :].tolist() for v in f] for f in faces]
     ngons = np.array([[vertices[face[0]][:2], vertices[face[1]][:2], vertices[face[2]][:2]] for face in faces])
     attribute = np.array(labels)
-    tris = PolyCollection(ngons, array=attribute, cmap='RdYlGn')
+    custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', global_label_colors, N=len(global_label_colors))
+    tris = PolyCollection(ngons, array=attribute, cmap=custom_cmap)
     fig, ax = plt.subplots()
     ax.add_collection(tris)
     ax.autoscale()

@@ -99,7 +99,8 @@ class FPTriangleNodes(GeometricDataset):
         self.labels = []
         self.names = []
         # self.only_backward_edges = only_backward_edges
-        self.num_tokens = config.num_tokens
+        # self.num_tokens = config.num_tokens
+        self.discrete_size = config.discrete_size
         self.scale_augment = scale_augment
         self.shift_augment = shift_augment
         self.low_augment = config.low_augment
@@ -179,7 +180,7 @@ class FPTriangleNodes(GeometricDataset):
             vertices = shift_vertices(vertices)
         # 注意该排序会同时做离散化操作
         vertices, faces,labels,confidence = \
-            sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.num_tokens)
+            sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.discrete_size)
         triangles = vertices[faces, :].reshape(-1,9)
         # triangles, normals, areas, angles, vertices, faces = create_feature_stack(vertices, faces, self.num_tokens)
         features = np.hstack([triangles, confidence])
