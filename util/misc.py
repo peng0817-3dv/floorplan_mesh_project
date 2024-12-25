@@ -66,8 +66,9 @@ def scale_vertices(vertices, x_lims=(0.75, 1.25), y_lims=(0.75, 1.25), z_lims=(0
     x = np.random.uniform(low=x_lims[0], high=x_lims[1], size=(1,))
     y = np.random.uniform(low=y_lims[0], high=y_lims[1], size=(1,))
     z = np.random.uniform(low=z_lims[0], high=z_lims[1], size=(1,))
+    reverse_record = np.array([1 / x, 1 / y])
     vertices = np.stack([vertices[:, 0] * x, vertices[:, 1] * y, vertices[:, 2] * z], axis=-1)
-    return vertices
+    return vertices,reverse_record
 
 
 def shift_vertices(vertices, x_lims=(-0.1, 0.1), y_lims=(-0.1, 0.1), z_lims=(-0.075, 0.075)):
@@ -79,14 +80,20 @@ def shift_vertices(vertices, x_lims=(-0.1, 0.1), y_lims=(-0.1, 0.1), z_lims=(-0.
     y = max(min(y, 0.5 - vertices[:, 1].max()), -0.5 - vertices[:, 1].min())
     z = max(min(z, 0.5 - vertices[:, 2].max()), -0.5 - vertices[:, 2].min())
     vertices = np.stack([vertices[:, 0] + x, vertices[:, 1] + y, vertices[:, 2] + z], axis=-1)
+    reverse_record = np.array([-x, -y])
     return vertices
 
 
 def normalize_vertices(vertices):
     bounds = np.array([vertices.min(axis=0), vertices.max(axis=0)])  # type: ignore
-    vertices = vertices - (bounds[0] + bounds[1])[None, :] / 2
-    vertices = vertices / (bounds[1] - bounds[0]).max()
-    return vertices
+    scale_factor = 1 / (bounds[1] - bounds[0]).max()
+    shift_vector = - (bounds[0] + bounds[1])[None, :] / 2
+    vertices = vertices + shift_vector
+    vertices = vertices * scale_factor
+
+    reversed_record_1 = np.array([-shift_vector[0, 0],-shift_vector[0, 1]])
+    reversed_record_2 = np.array([1 / scale_factor,1 / scale_factor])
+    return vertices,reversed_record_1,reversed_record_2
 
 
 def top_p_sampling(logits, p):

@@ -165,6 +165,7 @@ class FPTriangleNodes(GeometricDataset):
         faces = self.cached_faces[idx]
         confidence = self.extra_features[idx]
         labels = self.labels[idx]
+        reverse_op = []
         if self.scale_augment:
             if self.low_augment:
                 x_lims = (0.9, 1.1)
@@ -174,10 +175,16 @@ class FPTriangleNodes(GeometricDataset):
                 x_lims = (0.75, 1.25)
                 y_lims = (0.75, 1.25)
                 z_lims = (0.75, 1.25)
-            vertices = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
-        vertices = normalize_vertices(vertices)
+            vertices,scale_rev = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
+            reverse_op.append(['*',scale_rev])
+        vertices,rev_1,rev_2 = normalize_vertices(vertices)
+        reverse_op.append(['+',rev_1])
+        reverse_op.append(['*',rev_2])
         if self.shift_augment:
-            vertices = shift_vertices(vertices)
+            vertices,shift_rev = shift_vertices(vertices)
+            reverse_op.append(['+',shift_rev])
+
+        reverse_op = reverse_op[::-1]
         # 注意该排序会同时做离散化操作
         vertices, faces,labels,confidence = \
             sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.discrete_size)
@@ -186,13 +193,14 @@ class FPTriangleNodes(GeometricDataset):
         features = np.hstack([triangles, confidence])
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
         target = torch.from_numpy(labels).long() - 1
-        return features, target, vertices, faces, face_neighborhood
+        return features, target, vertices, faces, face_neighborhood,reverse_op
 
     def get(self, idx):
-        features, target, vertices, faces, face_neighborhood = self.get_all_features_for_shape(idx)
+        features, target, vertices, faces, face_neighborhood,reverse_op = self.get_all_features_for_shape(idx)
         return GeometricData(x=torch.from_numpy(features).float(), y=target,
                              edge_index=torch.from_numpy(face_neighborhood.T).long(),
-                             num_vertices=vertices.shape[0], faces=torch.from_numpy(np.array(faces)).long())
+                             num_vertices=vertices.shape[0], faces=torch.from_numpy(np.array(faces)).long(),
+                             reverse_op=reverse_op)
 
     def save_sample_data_by_idx(self,idx,is_quantized=False,save_path_root = os.getcwd()):
         vertices = self.cached_vertices[idx]

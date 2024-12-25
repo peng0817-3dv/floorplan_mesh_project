@@ -1,5 +1,8 @@
 import os
 import sys
+
+from util.s3d_data_process import process_vertice_by_op_record
+
 curPath = os.path.abspath(os.path.dirname(__file__))
 rootPath = os.path.split(curPath)[0]
 sys.path.append(rootPath)
@@ -29,16 +32,13 @@ def main(config):
     dataset = FPTriangleNodes(config,'test')
     # model = TriangleTokenizationGraphConv(config)
     model = TriangleTokenizationGraphConv.load_from_checkpoint(checkpoint_path=load_checkpoint_path)
-    # model = TriangleTokenizationGraphConv(config)
-    model = TriangleTokenizationGraphConv.load_from_checkpoint(checkpoint_path=load_checkpoint_path)
     model.eval()
     progress_bar = tqdm(total = len(dataset),desc="Inference")
-    for idx in range(len(dataset)):
-        data = dataset.get(idx)
+
     for idx in range(len(dataset)):
         data = dataset.get(idx)
         # print(data.batch_size)
-        _, targets, vertices, faces, _ = dataset.get_all_features_for_shape(idx)
+        _, targets, vertices, faces, _,op = dataset.get_all_features_for_shape(idx)
         # _, _, vertices, faces, _ = dataset.get_all_features_for_shape(idx)
         targets = targets + 1
         predict = model.inference_data(data)
@@ -48,6 +48,7 @@ def main(config):
                                             labels=predict,output_path=os.path.join(predict_path_root, f"test_{name}.png"))
             plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces,\
                                             labels=targets,output_path=os.path.join(predict_path_root, f"ground_truth_{name}.png"))
+            vertices = process_vertice_by_op_record(reverse_op=op, vertices=vertices)
             export_mesh_to_shp(vertices=vertices, faces=faces,\
                                labels=predict,output_path=os.path.join(predict_path_root, f"test_{name}_shpfile"))
             export_mesh_to_shp(vertices=vertices, faces=faces,\
