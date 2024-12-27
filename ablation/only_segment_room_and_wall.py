@@ -1,23 +1,28 @@
 import hydra
 import numpy as np
-import pylab as pl
+import pytorch_lightning as pl
 from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
 from lightning_utilities.core.rank_zero import rank_zero_only
-from wandb.wandb_torch import torch
+import torch
 import trimesh
 from dataset import sort_vertices_and_faces_and_labels_and_features
 from dataset.floorplan_triangles import FPTriangleNodes, FPTriangleNodesDataloader
 from model.decoder import resnet34_decoder
 from model.encoder import GraphEncoder
-from trainer import create_conv_batch, step
+from trainer import create_conv_batch, step, create_trainer
 from util.misc import scale_vertices, normalize_vertices, shift_vertices
 
 
 class FPTriangleWithThreeClsNodes(FPTriangleNodes):
+    def __init__(self, config, split, scale_augment, shift_augment):
+        super().__init__(config, split, scale_augment, shift_augment)
+        self.use_confidence = config.use_confidence
     def get_all_features_for_shape(self, idx):
         vertices = self.cached_vertices[idx]
         faces = self.cached_faces[idx]
         confidence = self.extra_features[idx]
+        if not self.use_confidence:
+            confidence = np.zeros_like(confidence)
         labels = self.labels[idx]
         if self.scale_augment:
             if self.low_augment:
@@ -41,6 +46,8 @@ class FPTriangleWithThreeClsNodes(FPTriangleNodes):
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
 
         labels = np.where((labels != 31)&(labels != 32), 1, labels)
+        labels = np.where(labels == 31, 2, labels)
+        labels = np.where(labels == 32, 3, labels)
         target = torch.from_numpy(labels).long() - 1
         return features, target, vertices, faces, face_neighborhood
 
@@ -51,8 +58,8 @@ class OnlySegmentRoomAndWall(pl.LightningModule):
         self.config = config
         self.save_hyperparameters()
 
-        self.train_dataset = FPTriangleNodes(config, 'train', config.scale_augment, config.shift_augment)
-        self.val_dataset = FPTriangleNodes(config, 'val', config.scale_augment, config.shift_augment)
+        self.train_dataset = FPTriangleWithThreeClsNodes(config, 'train', config.scale_augment, config.shift_augment)
+        self.val_dataset = FPTriangleWithThreeClsNodes(config, 'val', config.scale_augment, config.shift_augment)
 
         # 网络的编码器为GraphEncoder，解码器为resnet34_decoder
         self.encoder = GraphEncoder(no_max_pool=config.g_no_max_pool, aggr=config.g_aggr, graph_conv=config.graph_conv, use_point_features=config.use_point_feats, output_dim=576)
@@ -169,9 +176,9 @@ class OnlySegmentRoomAndWall(pl.LightningModule):
 
 @hydra.main(config_path='../config', config_name='only_segment_room_and_wall', version_base='1.2')
 def main(config):
-    train_dataset = FPTriangleWithThreeClsNodes(\
-        config, 'train', config.scale_augment, config.shift_augment)
-    data = train_dataset[0]
-
+    # 创建一个lightning提供的Trainer实例
+    trainer = create_trainer("TriangleTokens", config)
+    model = OnlySegmentRoomAndWall(config)
+    trainer.fit(model, ckpt_path=config.resume)
 if __name__ == '__main__':
     main()

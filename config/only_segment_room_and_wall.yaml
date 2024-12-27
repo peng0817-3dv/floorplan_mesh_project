@@ -102,3 +102,5 @@ num_cls: 4
 ce_weight: {'outer wall':0.2, 'inner wall':0.2, 'room':1.0}
 discrete_size: 512
 
+use_confidence: False
+
