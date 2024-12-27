@@ -114,6 +114,28 @@ def export_mesh_to_obj(vertices, faces, output_path):
     mesh.export(output_path)
 
 
+def export_face_to_obj(faces, output_path):
+    def save_line_segments_to_obj(filename, vertices, lines):
+        with open(filename, 'w') as file:
+            # 写入顶点数据
+            for vertex in vertices:
+                file.write(f"v {vertex[0]} {vertex[1]} {vertex[2]}\n")
+
+            # 写入线段数据
+            for line in lines:
+                # 线段格式是用 'l' 来表示线段，注意索引从 1 开始
+                file.write(f"l {line[0]} {line[1]}\n")
+
+    lines = []
+    vertices = []
+    vertices_id = 1
+    for face in faces:
+        for i in range(len(face) - 1):
+            lines.append([i + vertices_id, (i + 1) % (len(face)-1) + vertices_id])
+            vertices.append(face[i])
+        vertices_id = vertices_id + len(face) - 1
+    save_line_segments_to_obj(output_path, vertices, lines)
+
 def export_mesh_to_shp(vertices,faces,labels,output_path):
     if not os.path.exists(output_path):
         os.makedirs(output_path)

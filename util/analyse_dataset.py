@@ -3,7 +3,9 @@ import random
 
 import matplotlib.pyplot as plt
 import numpy as np
-from util.s3d_data_load import read_s3d_mesh_info,global_label_colors,enum_label
+from util.s3d_data_load import read_s3d_mesh_info, global_label_colors, enum_label, get_faces_coord
+from util.visualization import export_face_to_obj
+
 
 def analyse_dataset_split(splits: list, label_datas, analyse_results_path = None):
     # s = sum(len(split) for split in splits)
@@ -60,4 +62,7 @@ def random_split(size, train_ratio, val_ratio):
     test_idx = np.sort(test_idx)
     return [train_idx, val_idx, test_idx]
 
+def shp_to_obj(shp_path, obj_path):
+    faces_coords = get_faces_coord(shp_path)
+    export_face_to_obj(faces_coords, obj_path)
 

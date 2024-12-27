@@ -27,5 +27,5 @@ def clean_dataset_by_clean_record(dataset_root,record_csv_path):
 
 if __name__ == '__main__':
     CLEAN_RECORD = 'G:/workspace_plane2DDL/bound_gen_tri_shp/clean_record.xlsx'
-    DATASET_ROOT = 'G:/workspace_plane2DDL/bound_gen_tri_shp'
+    DATASET_ROOT = r'G:\workspace_plane2DDL\testData\floorplane_result_shp'
     clean_dataset_by_clean_record(DATASET_ROOT,CLEAN_RECORD)

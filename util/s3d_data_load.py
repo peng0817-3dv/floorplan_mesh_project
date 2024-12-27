@@ -131,6 +131,19 @@ def get_edges_data(edge_file):
     return edges, edges_confidence, point_id_to_edges_id
 
 
+def get_faces_coord(face_file):
+    sf = shapefile.Reader(face_file)
+    records = sf.records()
+    shapes = sf.shapes()
+    faces = []
+    for polygon in shapes:
+        face = []
+        for point in polygon.points:
+            face.append((float(point[0]), float(point[1]), 0.0))
+        faces.append(face)
+    return faces
+
+
 def get_faces_data(face_file):
     """
     从面shp文件中提取单个平面中的所有三角形的信息
