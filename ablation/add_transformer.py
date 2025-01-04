@@ -66,7 +66,7 @@ class AddTransformer(pl.LightningModule):
         # 将geometric_torch式的batch转化为普通totch式的batch
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, data.batch, self.config.batch_size)
         # 输入到decoder(resnet34) 得到预测的token
-        encoded_x_conv = self.transformer(encoded_x_conv,conv_mask)
+        encoded_x_conv = self.transformer(encoded_x_conv,conv_mask)  # B x 512 x max_graph_size
         decoded_x_conv = self.decoder(encoded_x_conv) # B x 512 x max_graph_size => B X max_graph_size X 9 X num_tokens
         # 此处变为B X max_graph_size X num_cls
 

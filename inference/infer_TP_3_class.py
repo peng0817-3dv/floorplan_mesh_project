@@ -11,8 +11,9 @@ import os
 import hydra
 from tqdm import tqdm
 
-from trainer.train_vocabulary import TriangleTokenizationGraphConv,FPTriangleNodes,FPTriangleNodesDataloader
+from trainer.train_vocabulary import TriangleTokenizationGraphConv,FPTriangleNodesDataloader
 from util.visualization import plot_vertices_and_faces_with_labels, export_mesh_to_shp
+from ablation.only_segment_room_and_wall import FPTriangleWithThreeClsNodes
 
 @hydra.main(config_path='../config', config_name='only_segment_room_and_wall', version_base='1.2')
 def main(config):
@@ -29,12 +30,17 @@ def main(config):
         os.makedirs(predict_path_root)
         print(f"make dir {predict_path_root}")
 
-    dataset = FPTriangleNodes(config,'test')
+
     # model = TriangleTokenizationGraphConv(config)
     model = TriangleTokenizationGraphConv.load_from_checkpoint(checkpoint_path=load_checkpoint_path)
     model.eval()
-    progress_bar = tqdm(total = len(dataset),desc="Inference")
 
+    config.dataset_root = "" # 测试数据集位置
+    config.train_ratio = 1.0
+    config.val_ratio = 0.0
+    config.test_ratio = 0.0
+    dataset = FPTriangleWithThreeClsNodes(config,'train')
+    progress_bar = tqdm(total = len(dataset),desc="Inference")
     for idx in range(len(dataset)):
         data = dataset.get(idx)
         # print(data.batch_size)

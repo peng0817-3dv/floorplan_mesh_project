@@ -125,7 +125,7 @@ class FPTriangleNodes(GeometricDataset):
                 data["names"].append(scene_name)
 
             data["split_idx"] = random_split(len(data["labels"]), config.train_ratio, config.val_ratio)
-            analyse_dataset_split(data["split_idx"], data["labels"], split_analysis_path)
+            # analyse_dataset_split(data["split_idx"], data["labels"], split_analysis_path)
             with open(data_cache_path, "wb") as f:
                 pickle.dump(data,f)
 
