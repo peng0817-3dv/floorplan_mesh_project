@@ -34,7 +34,7 @@ def main():
 
 
 def test_shp_to_obj():
-    shp_root = r"G:\workspace_plane2DDL\real_point_cloud_dataset\scaled_stru3d_anno"
+    shp_root = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_anno"
 
     tq_bar = tqdm(os.listdir(shp_root))
     for scene in os.listdir(shp_root):
@@ -66,5 +66,5 @@ def mov():
 
 if __name__ == '__main__':
     # main()
-    # test_shp_to_obj()
-    mov()
+    test_shp_to_obj()
+    # mov()
