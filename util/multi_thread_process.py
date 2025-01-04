@@ -1,9 +1,5 @@
 import os
-import threading
-import time
 from multiprocessing import Pool, Manager
-from queue import Queue as normalQueue
-
 from tqdm import tqdm
 
 CPP_EXE_PATH = r"F:\DIP\DipTools_Indoor\bin\Release\ExportMeshGptFeature.exe"
@@ -68,8 +64,6 @@ def show_progress(total_tasks,progress_queue):
     diff_tasks = completed_tasks - last_completed_tasks
     tqdm_bar.update(diff_tasks)
     tqdm_bar.close()
-
-
 
 def main():
     root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_pointcloud"
