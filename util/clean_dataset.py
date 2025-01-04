@@ -7,7 +7,8 @@ right_type = ['正确']
 
 def clean_dataset_by_clean_record(dataset_root,record_csv_path):
     data = pd.read_excel(record_csv_path)
-    clean_dataset_root = os.path.join( os.path.dirname(dataset_root),'cleaned_dataset' )
+    data_name = os.path.basename(dataset_root)
+    clean_dataset_root = os.path.join( os.path.dirname(dataset_root),f'{data_name}_cleaned')
     progress_bar = tqdm(total=len(os.listdir(dataset_root)))
     if not os.path.exists(clean_dataset_root):
         os.makedirs(clean_dataset_root)
@@ -25,7 +26,4 @@ def clean_dataset_by_clean_record(dataset_root,record_csv_path):
             shutil.copytree(scene_path, target_path)
         progress_bar.update(1)
 
-if __name__ == '__main__':
-    CLEAN_RECORD = 'G:/workspace_plane2DDL/bound_gen_tri_shp/clean_record.xlsx'
-    DATASET_ROOT = r'G:\workspace_plane2DDL\testData\floorplane_result_shp'
-    clean_dataset_by_clean_record(DATASET_ROOT,CLEAN_RECORD)
+    return clean_dataset_root
