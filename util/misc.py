@@ -80,8 +80,13 @@ def shift_vertices(vertices, x_lims=(-0.1, 0.1), y_lims=(-0.1, 0.1), z_lims=(-0.
     y = max(min(y, 0.5 - vertices[:, 1].max()), -0.5 - vertices[:, 1].min())
     z = max(min(z, 0.5 - vertices[:, 2].max()), -0.5 - vertices[:, 2].min())
     vertices = np.stack([vertices[:, 0] + x, vertices[:, 1] + y, vertices[:, 2] + z], axis=-1)
+    if isinstance(x, float):
+        x = np.array([x])
+    if isinstance(y, float):
+        y = np.array([y])
+
     reverse_record = np.array([-x, -y])
-    return vertices
+    return vertices, reverse_record
 
 
 def normalize_vertices(vertices):

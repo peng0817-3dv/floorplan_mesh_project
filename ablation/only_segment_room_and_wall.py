@@ -24,6 +24,7 @@ class FPTriangleWithThreeClsNodes(FPTriangleNodes):
         if not self.use_confidence:
             confidence = np.zeros_like(confidence)
         labels = self.labels[idx]
+        reverse_op = []
         if self.scale_augment:
             if self.low_augment:
                 x_lims = (0.9, 1.1)
@@ -33,10 +34,14 @@ class FPTriangleWithThreeClsNodes(FPTriangleNodes):
                 x_lims = (0.75, 1.25)
                 y_lims = (0.75, 1.25)
                 z_lims = (0.75, 1.25)
-            vertices = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
-        vertices = normalize_vertices(vertices)
+            vertices, scale_rev = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
+            reverse_op.append(['*', scale_rev])
+        vertices, rev_1, rev_2 = normalize_vertices(vertices)
+        reverse_op.append(['+', rev_1])
+        reverse_op.append(['*', rev_2])
         if self.shift_augment:
-            vertices = shift_vertices(vertices)
+            vertices, shift_rev = shift_vertices(vertices)
+            reverse_op.append(['+', shift_rev])
         # 注意该排序会同时做离散化操作
         vertices, faces,labels,confidence = \
             sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.discrete_size)
@@ -49,7 +54,9 @@ class FPTriangleWithThreeClsNodes(FPTriangleNodes):
         labels = np.where(labels == 31, 2, labels)
         labels = np.where(labels == 32, 3, labels)
         target = torch.from_numpy(labels).long() - 1
-        return features, target, vertices, faces, face_neighborhood
+
+        reverse_op = reverse_op[::-1]
+        return features, target, vertices, faces, face_neighborhood,reverse_op
 
 
 class OnlySegmentRoomAndWall(pl.LightningModule):
