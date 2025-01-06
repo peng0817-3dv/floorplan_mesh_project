@@ -41,9 +41,9 @@ def mesh_generate(root_dir, label_dir, result_dir, point_cloud_name, label_name)
     print("所有任务处理完成！")
 
 if __name__ == '__main__':
-    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_pointcloud"
-    label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_anno"
-    result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_featured_shp_0-250"
-    point_cloud_name = "scale.laz"
+    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_pointcloud_scale_0.001"
+    label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_anno_scale_0.001"
+    result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_featured_shp"
+    point_cloud_name = "point_cloud.las"
     label_name = "GT_room_poly.shp"
     mesh_generate(root_dir, label_dir, result_dir, point_cloud_name, label_name)
