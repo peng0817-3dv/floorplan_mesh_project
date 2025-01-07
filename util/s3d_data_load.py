@@ -230,3 +230,21 @@ def read_s3d_mesh_info(obj_root_path):
     face_feature = np.array(face_feature)
     labels = np.array(labels)
     return vertices, faces, face_feature, labels
+
+
+def add_split_txt(dataset_root_path, train_scenes_suffix, val_scenes_suffix, test_scenes_suffix):
+    txt_file = os.path.join(dataset_root_path, 'train.txt')
+    with open(txt_file, 'w') as f:
+        for suffix in train_scenes_suffix:
+            scene_name = 'scene_' + str(suffix).zfill(5)
+            f.write(scene_name + '\n')
+    txt_file = os.path.join(dataset_root_path, 'val.txt')
+    with open(txt_file, 'w') as f:
+        for suffix in val_scenes_suffix:
+            scene_name = 'scene_' + str(suffix).zfill(5)
+            f.write(scene_name + '\n')
+    txt_file = os.path.join(dataset_root_path, 'test.txt')
+    with open(txt_file, 'w') as f:
+        for suffix in test_scenes_suffix:
+            scene_name = 'scene_' + str(suffix).zfill(5)
+            f.write(scene_name + '\n')

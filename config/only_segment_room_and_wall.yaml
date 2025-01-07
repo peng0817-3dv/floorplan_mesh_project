@@ -1,6 +1,15 @@
 # data
 dataset: 'shapenet'
 dataset_root: 'G:/workspace_plane2DDL/RefCode/meshgpt-official-version/MeshGPT/data/structure3d'
+train_split_file: 'train.txt'
+val_split_file: 'val.txt'
+test_split_file: 'test.txt'
+
+#experiment settings
+experiment: 3_cls  # experiment name
+max_epoch: 200 # total number of training iterations
+save_epoch: 1  # save every n epoch
+
 # not actually number of tokens, but the quantization resolution + 3
 num_tokens: 131
 train_ratio: 0.7
@@ -20,9 +29,8 @@ shift_augment_val: False
 
 wandb_main: False # set to true to log to main board rather than debug board
 suffix: ''  # suffix for project name in wandb, if wandb_main is false, auto populated to dump debug experiments to a different project
-experiment: 3_cls  # experiment name
+
 seed: null
-save_epoch: 1  # save every n epoch
 sanity_steps: 0  # sanity steps before the run
 val_check_percent: 1.0  # check this proportion of val set when evaluation runs
 val_check_interval: 1  # run evaluation every x% of the train set steps
@@ -74,7 +82,7 @@ model:
 # adamw optimizer
 lr: 1e-4 # max learning rate
 force_lr: null
-max_epoch: 2000 # total number of training iterations
+
 weight_decay: 1e-1
 beta1: 0.9
 beta2: 0.95
@@ -95,7 +103,7 @@ hydra:
 # inference settings
 load_checkpoint_path: "./test"
 save_inference_path:  # if None, will save to the same directory as the loaded checkpoint
-
+inference_dataset_path: # './data/stru3d_featured_shp'
 
 # FT settings
 num_cls: 4

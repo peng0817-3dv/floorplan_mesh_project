@@ -14,8 +14,8 @@ from util.misc import scale_vertices, normalize_vertices, shift_vertices
 
 
 class FPTriangleWithThreeClsNodes(FPTriangleNodes):
-    def __init__(self, config, split, scale_augment, shift_augment):
-        super().__init__(config, split, scale_augment, shift_augment)
+    def __init__(self, config, split, split_mode="ratio"):
+        super().__init__(config, split, split_mode)
         self.use_confidence = config.use_confidence
     def get_all_features_for_shape(self, idx):
         vertices = self.cached_vertices[idx]
@@ -65,8 +65,8 @@ class OnlySegmentRoomAndWall(pl.LightningModule):
         self.config = config
         self.save_hyperparameters()
 
-        self.train_dataset = FPTriangleWithThreeClsNodes(config, 'train', config.scale_augment, config.shift_augment)
-        self.val_dataset = FPTriangleWithThreeClsNodes(config, 'val', config.scale_augment, config.shift_augment)
+        self.train_dataset = FPTriangleWithThreeClsNodes(config, 'train')
+        self.val_dataset = FPTriangleWithThreeClsNodes(config, 'val')
 
         # 网络的编码器为GraphEncoder，解码器为resnet34_decoder
         self.encoder = GraphEncoder(no_max_pool=config.g_no_max_pool, aggr=config.g_aggr, graph_conv=config.graph_conv, use_point_features=config.use_point_feats, output_dim=576)
@@ -134,7 +134,6 @@ class OnlySegmentRoomAndWall(pl.LightningModule):
             self.log(f"val/cross_entropy_loss", loss.item(), add_dataloader_idx=False, on_step=False, on_epoch=True, prog_bar=False, logger=True, sync_dist=True,batch_size=self.config.batch_size)
         if not torch.isnan(acc).any():
             self.log(f"val/acc", acc.item(), add_dataloader_idx=False, on_step=False, on_epoch=True, prog_bar=False, logger=True, sync_dist=True,batch_size=self.config.batch_size)
-
 
     def inference_data(self, data):
         encoded_x = self.encoder(data.x.to(self.device), data.edge_index.to(self.device), torch.zeros([data.x.shape[0]],device=self.device).long())

@@ -18,20 +18,14 @@ from util.misc import scale_vertices, normalize_vertices, shift_vertices
 
 @hydra.main(config_path='../config', config_name='only_segment_room_and_wall', version_base='1.2')
 def main(config):
-    config.dataset_root = r"G:\workspace_plane2DDL\testData\test_sample" # 测试数据集位置
-    config.train_ratio = 0.0
-    config.val_ratio = 0.0
-    config.test_ratio = 1.0
-    dataset = FPTriangleWithThreeClsNodes(config,'test',True,True)
+    config.dataset_root = r"G:/workspace_plane2DDL/testData\anno_shp_with_normal_diffusion" # 测试数据集位置
 
-    test_scene_id = 0
+    dataset = FPTriangleWithThreeClsNodes(config,'test',split_mode="scene_names")
 
-    _, labels, vertices, faces, _, op = dataset.get_all_features_for_shape(test_scene_id)
-    vertices = process_vertice_by_op_record(op, vertices)
-    output_path = f"test_scene_{test_scene_id}"
-    if os.path.exists(output_path):
-        shutil.rmtree(output_path)
-    export_mesh_to_shp(vertices,faces,labels,output_path)
+    n = len(dataset)
+    print(f"dataset len:{n}")
+    print(f"start:{dataset.get_name(0)}")
+    print(f"end:{dataset.get_name(n-1)}")
 
 
 if __name__ == '__main__':

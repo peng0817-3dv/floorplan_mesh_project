@@ -22,77 +22,10 @@ from torch_geometric.data import Data as GeometricData
 from torch_geometric.loader.dataloader import Collater as GeometricCollator
 
 
-class FPOriginTriangleNodes(GeometricDataset):
-    def __init__(self, config,split):
-        super().__init__()
-        data_path = Path(config.dataset_root)
-        self.cached_vertices = []
-        self.cached_faces = []
-        self.extra_features = []
-
-        data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
-        if os.path.exists(data_cache_path):
-            with open(data_cache_path, "rb") as f:
-                data = pickle.load(f)
-            print(f"load data from cache,cache path:{data_cache_path}")
-        else:
-            data = {"features": [], "vertices": [], "faces": [], "labels": []}
-            for scene_name in tqdm(os.listdir(data_path)):
-                scene_full_path = os.path.join(data_path, scene_name)
-                if not os.path.isdir(scene_full_path):
-                    continue
-                vertices, faces, face_feature, labels = read_s3d_mesh_info(scene_full_path)
-                data["features"].append(face_feature)
-                data["vertices"].append(vertices)
-                data["faces"].append(faces)
-                data["labels"].append(labels)
-            with open(data_cache_path, "wb") as f:
-                pickle.dump(data,f)
-
-        train_size = int(len(data["faces"]) * config.train_ratio)
-        val_size = int(len(data["faces"]) * config.val_ratio)
-
-        if split == "train":
-            self.extra_features = data[f'features'][:train_size]
-            self.cached_vertices = data[f'vertices'][:train_size]
-            self.cached_faces = data[f'faces'][:train_size]
-            self.labels = data[f'labels'][:train_size]
-        elif split == "val":
-            self.extra_features = data[f'features'][train_size:train_size+val_size]
-            self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
-            self.cached_faces = data[f'faces'][train_size:train_size+val_size]
-            self.labels = data[f'labels'][train_size:train_size+val_size]
-        elif split == "test":
-            self.extra_features = data[f'features'][train_size+val_size:]
-            self.cached_vertices = data[f'vertices'][train_size+val_size:]
-            self.cached_faces = data[f'faces'][train_size+val_size:]
-            self.labels = data[f'labels'][train_size+val_size:]
-
-
-    def get_feature(self, idx):
-        vertices = self.cached_vertices[idx]
-        faces = self.cached_faces[idx]
-        extra_features = self.extra_features[idx]
-        target = self.labels[idx]
-        face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)
-        triangles = vertices[faces, :].reshape(-1,9)
-        features = np.hstack([triangles, extra_features])
-        return features, target, face_neighborhood
-
-    def get(self, idx):
-        features, target, face_neighborhood = self.get_feature(idx)
-        return GeometricData(x=torch.from_numpy(features).float(), y=target,
-                             edge_index=torch.from_numpy(face_neighborhood.T).long(),
-                             )
-
-    def len(self):
-        return len(self.cached_vertices)
-
-
 class FPTriangleNodes(GeometricDataset):
-    def __init__(self, config, split,scale_augment=False,shift_augment=False):
+    def __init__(self, config, split, split_mode="ratio"):
         super().__init__()
-        data_path = Path(config.dataset_root)
+        self.config = config
         self.cached_vertices = []
         self.cached_faces = []
         self.extra_features = []
@@ -101,64 +34,133 @@ class FPTriangleNodes(GeometricDataset):
         # self.only_backward_edges = only_backward_edges
         # self.num_tokens = config.num_tokens
         self.discrete_size = config.discrete_size
-        self.scale_augment = scale_augment
-        self.shift_augment = shift_augment
+        self.scale_augment = config.scale_augment
+        self.shift_augment = config.shift_augment
         self.low_augment = config.low_augment
+        self.split = split
+        if split_mode == "ratio":
+            self.load_or_cache_data_split_by_ratio()
+        elif split_mode == "scene_names":
+            train_split = os.path.join(config.dataset_root,config.train_split_file)
+            val_split = os.path.join(config.dataset_root,config.val_split_file)
+            test_split = os.path.join(config.dataset_root,config.test_split_file)
 
-        data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
-        split_analysis_path = os.path.join(config.dataset_root, f"split_analysis.png")
+            def read_file(file_path):
+                scenes = []
+                with open(file_path, 'r') as f:
+                    for scene in f.readlines():
+                        scene = scene.strip('\n')
+                        if scene == '' or scene is None:
+                            continue
+                        scenes.append(scene)
+                return scenes
+
+            split_list = [
+                read_file(train_split),
+                read_file(val_split),
+                read_file(test_split)
+            ]
+            self.load_or_cache_data_split_by_scene_names(split_list)
+
+
+    def load_or_cache_data_split_by_ratio(self):
+        config = self.config
+        data_path = Path(config.dataset_root)
+        data_cache_path = os.path.join(config.dataset_root, f"cache_split_by_ratio.pkl")
+        # split_analysis_path = os.path.join(config.dataset_root, f"split_analysis.png")
         if os.path.exists(data_cache_path):
             with open(data_cache_path, "rb") as f:
                 data = pickle.load(f)
             print(f"load data from cache,cache path:{data_cache_path}")
         else:
-            data = {"features": [], "vertices": [], "faces": [], "labels": [],"names": [],"split_idx":[]}
+            data = {"features": [], "vertices": [], "faces": [], "labels": [], "names": [], "split_idx": []}
             for scene_name in tqdm(os.listdir(data_path)):
-                if not os.path.isdir(os.path.join(data_path, scene_name)):
+                if not scene_name.startswith('scene'):
                     continue
-                scene_full_path = os.path.join(data_path, scene_name)
-                vertices, faces, face_feature, labels = read_s3d_mesh_info(scene_full_path)
-                data["features"].append(face_feature)
-                data["vertices"].append(vertices)
-                data["faces"].append(faces)
-                data["labels"].append(labels)
-                data["names"].append(scene_name)
+                self.read_scene_data(data, data_path, scene_name)
 
             data["split_idx"] = random_split(len(data["labels"]), config.train_ratio, config.val_ratio)
             # analyse_dataset_split(data["split_idx"], data["labels"], split_analysis_path)
             with open(data_cache_path, "wb") as f:
-                pickle.dump(data,f)
+                pickle.dump(data, f)
+        self.split_data(data)
 
-        if split == "train":
+    def split_data(self, data):
+        if self.split == "train":
             self.extra_features = [data[f'features'][i] for i in data["split_idx"][0]]
             self.cached_vertices = [data[f'vertices'][i] for i in data["split_idx"][0]]
             self.cached_faces = [data[f'faces'][i] for i in data["split_idx"][0]]
             self.labels = [data[f'labels'][i] for i in data["split_idx"][0]]
             self.names = [data[f'names'][i] for i in data["split_idx"][0]]
-        elif split == "val":
+        elif self.split == "val":
             self.extra_features = [data[f'features'][i] for i in data["split_idx"][1]]
             self.cached_vertices = [data[f'vertices'][i] for i in data["split_idx"][1]]
             self.cached_faces = [data[f'faces'][i] for i in data["split_idx"][1]]
             self.labels = [data[f'labels'][i] for i in data["split_idx"][1]]
             self.names = [data[f'names'][i] for i in data["split_idx"][1]]
-        elif split == "test":
+        elif self.split == "test":
             self.extra_features = [data[f'features'][i] for i in data["split_idx"][2]]
             self.cached_vertices = [data[f'vertices'][i] for i in data["split_idx"][2]]
             self.cached_faces = [data[f'faces'][i] for i in data["split_idx"][2]]
             self.labels = [data[f'labels'][i] for i in data["split_idx"][2]]
             self.names = [data[f'names'][i] for i in data["split_idx"][2]]
-
-        if split == "train":
+        if self.split == "train":
             self.data_augmentation()
-        print(len(self.cached_vertices), "meshes loaded loading for", split)
+        print(len(self.cached_vertices), "meshes loaded loading for", self.split)
 
+    def load_or_cache_data_split_by_scene_names(self, split_list):
+        config = self.config
+        data_path = Path(config.dataset_root)
+        data_cache_path = os.path.join(config.dataset_root, f"cache_split_by_scene_names.pkl")
+
+        if not os.path.exists(data_cache_path):
+            data = {"features": [], "vertices": [], "faces": [], "labels": [], "names": [], "split_idx": []}
+            train_scenes = split_list[0]
+            val_scenes = split_list[1]
+            test_scenes = split_list[2]
+            idx = 0
+            data["split_idx"] = [[],[],[]]
+            for scene_name in tqdm(train_scenes):
+                if not os.path.exists(os.path.join(data_path, scene_name)):
+                    continue
+                self.read_scene_data(data, data_path, scene_name)
+                data["split_idx"][0].append(idx)
+                idx += 1
+            for scene_name in tqdm(val_scenes):
+                if not os.path.exists(os.path.join(data_path, scene_name)):
+                    continue
+                self.read_scene_data(data, data_path, scene_name)
+                data["split_idx"][1].append(idx)
+                idx += 1
+            for scene_name in tqdm(test_scenes):
+                if not os.path.exists(os.path.join(data_path, scene_name)):
+                    continue
+                self.read_scene_data(data, data_path, scene_name)
+                data["split_idx"][2].append(idx)
+                idx += 1
+            with open(data_cache_path, "wb") as f:
+                pickle.dump(data, f)
+        else:
+            with open(data_cache_path, "rb") as f:
+                data = pickle.load(f)
+            print(f"load data from cache,cache path:{data_cache_path}")
+        self.split_data(data)
+
+    @staticmethod
+    def read_scene_data(data, data_path, scene_name):
+        scene_full_path = os.path.join(data_path, scene_name)
+        vertices, faces, face_feature, labels = read_s3d_mesh_info(scene_full_path)
+        data["features"].append(face_feature)
+        data["vertices"].append(vertices)
+        data["faces"].append(faces)
+        data["labels"].append(labels)
+        data["names"].append(scene_name)
 
     def len(self):
         return len(self.cached_vertices)
 
     def get_name(self, idx):
         return self.names[idx]
-
 
     def get_all_features_for_shape(self, idx):
         vertices = self.cached_vertices[idx]
@@ -236,7 +238,7 @@ class FPTriangleNodes(GeometricDataset):
         augmented_faces = self.cached_faces.copy()
         augmented_labels = self.labels.copy()
         augmented_features = self.extra_features.copy()
-        augemnted_names = self.names.copy()
+        augmented_names = self.names.copy()
 
         transformations = [
             lambda v: rotate_vertices(v, 90),
@@ -253,14 +255,14 @@ class FPTriangleNodes(GeometricDataset):
             augmented_faces.extend(self.cached_faces)
             augmented_labels.extend(self.labels)
             augmented_features.extend(self.extra_features)
-            augemnted_names.extend(self.names)
+            augmented_names.extend(self.names)
 
         print(f" augmented data size: {len(augmented_vertices)},origin data size: {len(self.cached_vertices)}")
         self.cached_vertices = augmented_vertices
         self.cached_faces = augmented_faces
         self.labels = augmented_labels
         self.extra_features = augmented_features
-        self.names = augemnted_names
+        self.names = augmented_names
 
 
 class FPTriangleNodesDataloader(torch.utils.data.DataLoader):
@@ -374,6 +376,75 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
         return features, target, vertices, faces, face_neighborhood
 
 
+
+# 废弃
+class FPOriginTriangleNodes(GeometricDataset):
+    def __init__(self, config,split):
+        super().__init__()
+        data_path = Path(config.dataset_root)
+        self.cached_vertices = []
+        self.cached_faces = []
+        self.extra_features = []
+
+        data_cache_path = os.path.join(config.dataset_root, f"cache.pkl")
+        if os.path.exists(data_cache_path):
+            with open(data_cache_path, "rb") as f:
+                data = pickle.load(f)
+            print(f"load data from cache,cache path:{data_cache_path}")
+        else:
+            data = {"features": [], "vertices": [], "faces": [], "labels": []}
+            for scene_name in tqdm(os.listdir(data_path)):
+                scene_full_path = os.path.join(data_path, scene_name)
+                if not os.path.isdir(scene_full_path):
+                    continue
+                vertices, faces, face_feature, labels = read_s3d_mesh_info(scene_full_path)
+                data["features"].append(face_feature)
+                data["vertices"].append(vertices)
+                data["faces"].append(faces)
+                data["labels"].append(labels)
+            with open(data_cache_path, "wb") as f:
+                pickle.dump(data,f)
+
+        train_size = int(len(data["faces"]) * config.train_ratio)
+        val_size = int(len(data["faces"]) * config.val_ratio)
+
+        if split == "train":
+            self.extra_features = data[f'features'][:train_size]
+            self.cached_vertices = data[f'vertices'][:train_size]
+            self.cached_faces = data[f'faces'][:train_size]
+            self.labels = data[f'labels'][:train_size]
+        elif split == "val":
+            self.extra_features = data[f'features'][train_size:train_size+val_size]
+            self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
+            self.cached_faces = data[f'faces'][train_size:train_size+val_size]
+            self.labels = data[f'labels'][train_size:train_size+val_size]
+        elif split == "test":
+            self.extra_features = data[f'features'][train_size+val_size:]
+            self.cached_vertices = data[f'vertices'][train_size+val_size:]
+            self.cached_faces = data[f'faces'][train_size+val_size:]
+            self.labels = data[f'labels'][train_size+val_size:]
+
+
+    def get_feature(self, idx):
+        vertices = self.cached_vertices[idx]
+        faces = self.cached_faces[idx]
+        extra_features = self.extra_features[idx]
+        target = self.labels[idx]
+        face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)
+        triangles = vertices[faces, :].reshape(-1,9)
+        features = np.hstack([triangles, extra_features])
+        return features, target, face_neighborhood
+
+    def get(self, idx):
+        features, target, face_neighborhood = self.get_feature(idx)
+        return GeometricData(x=torch.from_numpy(features).float(), y=target,
+                             edge_index=torch.from_numpy(face_neighborhood.T).long(),
+                             )
+
+    def len(self):
+        return len(self.cached_vertices)
+
+
 def normal(triangles):
     # The cross product of two sides is a normal vector
     if torch.is_tensor(triangles):
@@ -423,3 +494,4 @@ def create_feature_stack_from_triangles(triangles):
     t_areas = area(triangles) * 1e3
     t_angles = angle(triangles) / float(np.pi)
     return triangles.reshape(-1, 9), t_areas.reshape(-1, 1), t_angles.reshape(-1, 3)
+
