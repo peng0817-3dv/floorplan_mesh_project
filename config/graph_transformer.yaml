@@ -21,7 +21,7 @@ batch_size: 2 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size: 4608 # context_size of the transformer, for good performance block_size > max sequence length
 padding: 0.0  # fraction of padding allowed, when sequences are beyond the transformer context size
 
-scale_augment: True  # augment shapes by random scaling
+scale_augment: False  # augment shapes by random scaling
 scale_augment_val: False  # augment val shapes by random scaling
 
 shift_augment: True  # augment shapes by shifting them in space

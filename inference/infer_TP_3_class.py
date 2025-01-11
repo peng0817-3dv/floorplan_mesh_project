@@ -11,7 +11,7 @@ from tqdm import tqdm
 import numpy as np
 from util.s3d_data_process import process_vertice_by_op_record
 from ablation.only_segment_room_and_wall import FPTriangleWithThreeClsNodes, OnlySegmentRoomAndWall
-from util.visualization import plot_vertices_and_faces_with_labels, export_mesh_to_shp
+from util.visualization import plot_vertices_and_faces_with_labels, export_mesh_to_shp,plot_ground_truth_and_prediction
 
 
 def build_dataset_for_cross(dataset_root, config):
@@ -72,12 +72,9 @@ def inference(config, load_checkpoint_path, dataset):
 
         name = dataset.get_name(idx)
 
-        plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces, \
-                                            labels=predict,
-                                            output_path=os.path.join(predict_path_root, f"{name}_predict.png"))
-        plot_vertices_and_faces_with_labels(vertices=vertices, faces=faces, \
-                                            labels=targets,
-                                            output_path=os.path.join(predict_path_root, f"{name}_ground_truth.png"))
+        plot_ground_truth_and_prediction(vertices=vertices, faces=faces, \
+                                         gt_labels=targets, pred_labels=predict,
+                                         output_path=os.path.join(predict_path_root, f"{name}_gt_pred.png"))
         vertices = process_vertice_by_op_record(reverse_op=op, vertices=vertices)
         export_mesh_to_shp(vertices=vertices, faces=faces, \
                            labels=predict, output_path=os.path.join(predict_path_root, f"{name}_shpfile_predict"))

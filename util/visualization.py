@@ -109,6 +109,25 @@ def plot_vertices_and_faces_with_labels(vertices, faces, labels,output_path):
     plt.close("all")
 
 
+def plot_ground_truth_and_prediction(vertices, faces, gt_labels, pred_labels, output_path):
+    ngons = np.array([[vertices[face[0]][:2], vertices[face[1]][:2], vertices[face[2]][:2]] for face in faces])
+    gt_attribute = np.array(gt_labels)
+    pred_attribute = np.array(pred_labels)
+    custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', global_label_colors, N=len(global_label_colors))
+    f, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.set_xlim(-0.5, 0.5)
+    ax1.set_ylim(-0.5, 0.5)
+    ax1.set_aspect('equal')
+    ax2.set_xlim(-0.5, 0.5)
+    ax2.set_ylim(-0.5, 0.5)
+    ax2.set_aspect('equal')
+    tris_gt = PolyCollection(ngons, array=gt_attribute, cmap=custom_cmap)
+    tris_pred = PolyCollection(ngons, array=pred_attribute, cmap=custom_cmap)
+    ax1.add_collection(tris_gt)
+    ax2.add_collection(tris_pred)
+    plt.savefig(output_path)
+    plt.close("all")
+
 def export_mesh_to_obj(vertices, faces, output_path):
     mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     mesh.export(output_path)
