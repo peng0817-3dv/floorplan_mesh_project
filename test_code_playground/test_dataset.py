@@ -26,7 +26,8 @@ def main(config):
     print(f"dataset len:{n}")
     print(f"start:{dataset.get_name(0)}")
     print(f"end:{dataset.get_name(n-1)}")
-
+    data1 = dataset[0]
+    print("done")
 
 if __name__ == '__main__':
     main()
