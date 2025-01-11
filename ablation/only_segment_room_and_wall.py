@@ -17,6 +17,7 @@ class FPTriangleWithThreeClsNodes(FPTriangleNodes):
     def __init__(self, config, split, split_mode="ratio"):
         super().__init__(config, split, split_mode)
         self.use_confidence = config.use_confidence
+
     def get_all_features_for_shape(self, idx):
         vertices = self.cached_vertices[idx]
         faces = self.cached_faces[idx]
