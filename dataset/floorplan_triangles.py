@@ -282,74 +282,15 @@ class FPTriangleNodesDataloader(torch.utils.data.DataLoader):
 
 
 class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
-    def __init__(self, config, split,scale_augment=False,shift_augment=False):
-        GeometricDataset.__init__(self)
-        data_path = Path(config.dataset_root)
-        self.cached_vertices = []
-        self.cached_faces = []
-        self.extra_features = []
-        self.labels = []
-        self.names = []
-        # self.only_backward_edges = only_backward_edges
-        self.num_tokens = config.num_tokens
-        self.scale_augment = scale_augment
-        self.shift_augment = shift_augment
-        self.low_augment = config.low_augment
-
-
-        data_cache_path = os.path.join(config.dataset_root, f"extra_features_cache.pkl")
-        if os.path.exists(data_cache_path):
-            with open(data_cache_path, "rb") as f:
-                data = pickle.load(f)
-            print(f"load data from cache,cache path:{data_cache_path}")
-        else:
-            data = {"features": [], "vertices": [], "faces": [], "labels": [],"names": []}
-            for scene_name in tqdm(os.listdir(data_path)):
-                scene_full_path = os.path.join(data_path, scene_name)
-                if not os.path.isdir(scene_full_path):
-                    continue
-                vertices, faces, face_feature, labels = read_s3d_mesh_info(scene_full_path)
-                data["features"].append(face_feature)
-                data["vertices"].append(vertices)
-                data["faces"].append(faces)
-                data["labels"].append(labels)
-                data["names"].append(scene_name)
-            with open(data_cache_path, "wb") as f:
-                pickle.dump(data,f)
-
-        train_size = int(len(data["faces"]) * config.train_ratio)
-        val_size = int(len(data["faces"]) * config.val_ratio)
-        test_size = len(data["faces"]) - train_size - val_size
-        if split == "train":
-            self.extra_features = data[f'features'][:train_size]
-            self.cached_vertices = data[f'vertices'][:train_size]
-            self.cached_faces = data[f'faces'][:train_size]
-            self.labels = data[f'labels'][:train_size]
-            self.names = data[f'names'][:train_size]
-        elif split == "val":
-            self.extra_features = data[f'features'][train_size:train_size+val_size]
-            self.cached_vertices = data[f'vertices'][train_size:train_size+val_size]
-            self.cached_faces = data[f'faces'][train_size:train_size+val_size]
-            self.labels = data[f'labels'][train_size:train_size+val_size]
-            self.names = data[f'names'][train_size:train_size+val_size]
-        elif split == "test":
-            self.extra_features = data[f'features'][train_size+val_size:]
-            self.cached_vertices = data[f'vertices'][train_size+val_size:]
-            self.cached_faces = data[f'faces'][train_size+val_size:]
-            self.labels = data[f'labels'][train_size+val_size:]
-            self.names = data[f'names'][train_size+val_size:]
-
-        if split == "train":
-            self.data_augmentation()
-        print(len(self.cached_vertices), "meshes loaded loading for", split)
-
-
+    def __init__(self, config, split, split_mode="ratio"):
+        super().__init__(config, split, split_mode)
 
     def get_all_features_for_shape(self, idx):
         vertices = self.cached_vertices[idx]
         faces = self.cached_faces[idx]
         confidence = self.extra_features[idx]
         labels = self.labels[idx]
+        reverse_op = []
         if self.scale_augment:
             if self.low_augment:
                 x_lims = (0.9, 1.1)
@@ -359,21 +300,48 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
                 x_lims = (0.75, 1.25)
                 y_lims = (0.75, 1.25)
                 z_lims = (0.75, 1.25)
-            vertices = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
-        vertices = normalize_vertices(vertices)
+            vertices, scale_rev = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
+            reverse_op.append(['*', scale_rev])
+        vertices, rev_1, rev_2 = normalize_vertices(vertices)
+        reverse_op.append(['+', rev_1])
+        reverse_op.append(['*', rev_2])
         if self.shift_augment:
-            vertices = shift_vertices(vertices)
+            vertices, shift_rev = shift_vertices(vertices)
+            reverse_op.append(['+', shift_rev])
         # 注意该排序会同时做离散化操作
         vertices, faces,labels,confidence = \
-            sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.num_tokens)
+            sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.discrete_size)
         triangles = vertices[faces, :]
         # triangles, normals, areas, angles, vertices, faces = create_feature_stack(vertices, faces, self.num_tokens)
-        triangles, areas, angles = create_feature_stack_from_triangles(triangles)
+        feature_dict = create_feature_stack_from_triangles(triangles)
+        triangles = feature_dict["triangles"]
+        areas = feature_dict["areas"]
+        angles = feature_dict["angles"]
+        edge_len = feature_dict["edge_len"]
 
-        features = np.hstack([triangles, confidence, areas, angles])
+        features = np.hstack([triangles, confidence, areas, angles, edge_len])
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
-        target = torch.from_numpy(labels).long() - 1
-        return features, target, vertices, faces, face_neighborhood
+        target = self.adjust_labels(labels)
+        return features, target, vertices, faces, face_neighborhood,reverse_op
+
+    @staticmethod
+    def adjust_labels(labels):
+        return torch.from_numpy(labels).long() - 1 # -1 方便将类从1~n转化为0~n-1,方便代码使用
+
+
+class FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes(FPTriangleWithGeneratedFeaturesNodes):
+    def __init__(self, config, split, split_mode="ratio"):
+        super().__init__(config, split, split_mode)
+
+    @staticmethod
+    def adjust_labels(labels):
+        labels = np.where((labels != 31) & (labels != 32), 1, labels)
+        labels = np.where(labels == 31, 2, labels)
+        labels = np.where(labels == 32, 3, labels)
+        return torch.from_numpy(labels).long() - 1
+
+
+
 
 
 
@@ -490,8 +458,24 @@ def unit_vector(vector):
         return vector / (np.linalg.norm(vector, axis=-1)[:, None] + 1e-8)
 
 
+def edge_length(triangles):
+    v_01 = triangles[:, 1] - triangles[:, 0]
+    v_02 = triangles[:, 2] - triangles[:, 0]
+    v_12 = triangles[:, 2] - triangles[:, 1]
+    if torch.is_tensor(triangles):
+        return torch.stack([torch.norm(v_01, dim=1), torch.norm(v_02, dim=1), torch.norm(v_12, dim=1)], dim=1)
+    else:
+        return np.stack([np.linalg.norm(v_01, axis=1), np.linalg.norm(v_02, axis=1), np.linalg.norm(v_12, axis=1)], axis=1)
+
+
 def create_feature_stack_from_triangles(triangles):
     t_areas = area(triangles) * 1e3
     t_angles = angle(triangles) / float(np.pi)
-    return triangles.reshape(-1, 9), t_areas.reshape(-1, 1), t_angles.reshape(-1, 3)
+    t_edge_len = edge_length(triangles)
+    return {
+        "triangles": triangles.reshape(-1, 9),
+        "areas":  t_areas.reshape(-1, 1),
+        "angles": t_angles.reshape(-1, 3),
+        "edge_len": t_edge_len.reshape(-1, 3)
+    }
 

@@ -12,6 +12,7 @@ from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
 
 from model.decoder import resnet34_decoder
 from model.encoder import get_conv, GraphEncoder
+from model.transformer_base import TransformerNet
 from trainer import create_trainer, step, create_conv_batch
 from util.positional_encoding import get_embedder
 from taylor_series_linear_attention import TaylorSeriesLinearAttn
@@ -148,46 +149,6 @@ class AddTransformer(pl.LightningModule):
         return (x.argmax(-1).reshape(-1) == y.reshape(-1)).sum() / y.shape[0]
 
 
-class TransformerNet(nn.Module):
-    def __init__(self, config,dim = 512):
-        super().__init__()
-        self.config = config
-
-        use_linear_attn = config.use_linear_attn
-        attn_kwargs = dict(
-            causal = False,
-            prenorm = True,
-            dropout = config.attn_dropout,
-            window_size = config.local_attn_window_size,
-        )
-        local_attn_kwargs = dict(
-            heads = config.local_attn_heads,
-            dim_head = config.local_attn_dim_head,
-        )
-        linear_attn_kwargs = dict(
-            heads = config.linear_attn_heads,
-            dim_head = config.linear_attn_dim_head,
-        )
-
-        curr_dim = dim
-        self.encoder_attn_blocks = ModuleList([])
-        for _ in range(config.attn_encoder_depth):
-            self.encoder_attn_blocks.append(nn.ModuleList([
-                TaylorSeriesLinearAttn(curr_dim, prenorm = True, **linear_attn_kwargs) if use_linear_attn else None,
-                LocalMHA(dim = curr_dim, **attn_kwargs, **local_attn_kwargs),
-                nn.Sequential(RMSNorm(curr_dim), FeedForward(curr_dim, glu = True, dropout = config.ff_dropout))
-            ]))
-
-    def forward(self, x, mask):
-        x = x.permute(0, 2, 1)
-        mask = mask.reshape(x.shape[0],-1)
-        for linear_attn, local_attn, ff in self.encoder_attn_blocks:
-            if linear_attn is not None:
-                x = linear_attn(x, mask) + x
-            x = local_attn(x, mask) + x
-            x = ff(x) + x
-        x = x.permute(0, 2, 1)
-        return x
 
 
 @hydra.main(config_path='../config', config_name='add_transformer', version_base='1.2')
