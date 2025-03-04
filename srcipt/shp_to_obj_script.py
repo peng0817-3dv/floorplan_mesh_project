@@ -22,7 +22,7 @@ def task_function(params:Param, progress_queue):
 
 
 def main():
-    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_anno_scale_0.001"
+    root_dir = r"G:\workspace_plane2DDL\testData\test_augment_polygon"
     total_tasks = len(os.listdir(root_dir))
     # 使用 Manager 提供的队列进行进程间通信
     with Manager() as manager:

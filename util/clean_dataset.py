@@ -27,3 +27,14 @@ def clean_dataset_by_clean_record(dataset_root,record_csv_path):
         progress_bar.update(1)
 
     return clean_dataset_root
+
+
+def clean_dataset_if_empty(dataset_root):
+    progress_bar = tqdm(total=len(os.listdir(dataset_root)))
+    for scene_name in os.listdir(dataset_root):
+        if not os.path.isdir(os.path.join(dataset_root, scene_name)):
+            continue
+        scene_path = os.path.join(dataset_root, scene_name)
+        if not os.listdir(scene_path):
+            shutil.rmtree(scene_path)
+        progress_bar.update(1)

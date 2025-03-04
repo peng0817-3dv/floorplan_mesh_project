@@ -85,6 +85,7 @@ class GraphTransformerEncoder(pl.LightningModule):
     def validation_step(self, data, batch_idx):
         # encoder
         encoded_x = self.encoder(data.x, data.edge_index, data.batch)
+        encoded_x = self.pre_quant(encoded_x)  # N x 576 -> N x 512
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, data.batch, self.config.batch_size)
 
         # transformer
@@ -107,6 +108,7 @@ class GraphTransformerEncoder(pl.LightningModule):
 
     def inference_data(self, data):
         encoded_x = self.encoder(data.x.to(self.device), data.edge_index.to(self.device), torch.zeros([data.x.shape[0]],device=self.device).long())
+        encoded_x = self.pre_quant(encoded_x)  # N x 576 -> N x 512
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, torch.zeros([data.x.shape[0]], device=self.device).long(), 1)
         encoded_x_conv = self.transformer(encoded_x_conv,conv_mask)
         encoded_x_conv = encoded_x_conv.permute(0, 2, 1)  # shape: (B, dim, num_triangles) -> (B, num_triangles, dim)

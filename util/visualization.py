@@ -1,5 +1,7 @@
+import json
 import os
 
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -13,7 +15,8 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from dataset import newface_token, stopface_token, padface_token, sort_vertices_and_faces_and_labels_and_features
 import shapefile
-
+from pycocotools.coco import COCO
+from skimage import io
 from util.s3d_data_load import global_label_colors
 
 # 约定-平面shp文件夹下各子文件的文件名
@@ -368,3 +371,109 @@ def triangle_sequence_to_mesh(triangles):
     vertices = triangles.reshape(-1, 3)
     faces = np.array(list(range(vertices.shape[0]))).reshape(-1, 3)
     return vertices, faces
+
+
+def visualization_seg(num_image, json_path, img_path, str=' '):
+    # 需要画图的是第num副图片, 对应的json路径和图片路径,
+    # str = ' '为类别字符串，输入必须为字符串形式 'str'，若为空，则返回所有类别id
+    coco = COCO(json_path)
+
+    catIds = coco.getCatIds()  # 获取指定类别 id
+    exclude_cat_ids = [17,18]  # 替换为你要排除的类别 ID
+
+    # 使用列表推导式获取排除指定 ID 之外的所有类别 ID
+    include_cat_ids = [cat_id for cat_id in catIds if cat_id not in exclude_cat_ids]
+    # print(include_cat_ids)
+
+    imgIds = coco.getImgIds()  # 获取图片i
+    # print(catIds,imgIds)
+    img = coco.loadImgs(num_image)[0]  # 加载图片,loadImgs() 返回的是只有一个内嵌字典元素的list, 使用[0]来访问这个元素
+    image = io.imread(os.path.join(img_path,img['file_name']))
+
+    annIds = coco.getAnnIds(imgIds=img['id'], catIds=include_cat_ids, iscrowd=None)
+    anns = coco.loadAnns(annIds)
+
+    # 读取在线图片的方法
+    # I = io.imread(img['coco_url'])
+
+    plt.imshow(image,cmap="gray")
+    coco.showAnns(anns)
+
+    # cv2.imwrite(f"gt_on_densitymap/{imgIds[num_image - 1]}.png", image)
+    ax = plt.gca()
+    for i, ann in enumerate(anns):
+        # 假设每个标注都有一个中心点，这里我们简单地使用bbox的中心作为示例
+        bbox = ann['bbox']
+        x, y, w, h = bbox
+        center_x = x + w / 2
+        center_y = y + h / 2
+        # 添加顺序数字（根据需求调整位置和样式）
+        plt.text(center_x, center_y, i, color='red', fontsize=12, ha='center', va='center')
+
+    # 显示图像
+    plt.axis('off')
+
+    plt.show()
+
+
+def visualization_bbox1(num_image, json_path, img_path):  # 需要画的第num副图片， 对应的json路径和图片路径
+    with open(json_path) as annos:
+        annotation_json = json.load(annos)
+
+    print('the annotation_json num_key is:', len(annotation_json))  # 统计json文件的关键字长度
+    print('the annotation_json key is:', annotation_json.keys())  # 读出json文件的关键字
+    print('the annotation_json num_images is:', len(annotation_json['images']))  # json文件中包含的图片数量
+
+    image_name = annotation_json['images'][num_image - 1]['file_name']  # 读取图片名
+    id = annotation_json['images'][num_image - 1]['id']  # 读取图片id
+
+    image_path = os.path.join(img_path, str(image_name).zfill(5))  # 拼接图像路径
+    image = cv2.imread(image_path, 1)  # 保持原始格式的方式读取图像
+    num_bbox = 0  # 统计一幅图片中bbox的数量
+
+    for i in range(len(annotation_json['annotations'][::])):
+        if annotation_json['annotations'][i - 1]['image_id'] == id:
+            num_bbox = num_bbox + 1
+            x, y, w, h = annotation_json['annotations'][i - 1]['bbox']  # 读取边框
+            image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 255), 2)
+
+    print('The unm_bbox of the display image is:', num_bbox)
+
+    # 显示方式1：用plt.imshow()显示
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)) #绘制图像，将CV的BGR换成RGB
+    plt.show() #显示图像
+
+    # 显示方式2：用cv2.imshow()显示
+    # cv2.namedWindow(image_name, 0)  # 创建窗口
+    # cv2.resizeWindow(image_name, 1000, 1000)  # 创建500*500的窗口
+    # cv2.imshow(image_name, image)
+    # cv2.waitKey(0)
+
+
+def visualization_bbox_seg(num_image, json_path, img_path, *str):  # 需要画图的是第num副图片， 对应的json路径和图片路径
+
+    coco = COCO(json_path)
+
+    if len(str) == 0:
+        catIds = []
+    else:
+        catIds = coco.getCatIds(catNms=[str[0]])  # 获取给定类别对应的id 的dict（单个内嵌字典的类别[{}]）
+        catIds = coco.loadCats(catIds)[0]['id']  # 获取给定类别对应的id 的dict中的具体id
+
+    list_imgIds = coco.getImgIds(catIds=catIds)  # 获取含有该给定类别的所有图片的id
+    img = coco.loadImgs(list_imgIds[num_image - 1])[0]  # 获取满足上述要求，并给定显示第num幅image对应的dict
+    image = io.imread(img_path + img['file_name'])  # 读取图像
+    image_name = img['file_name']  # 读取图像名字
+    image_id = img['id']  # 读取图像id
+    print(image_id)
+    img_annIds = coco.getAnnIds(imgIds=img['id'], catIds=catIds, iscrowd=None)  # 读取这张图片的所有seg_id
+    img_anns = coco.loadAnns(img_annIds)
+
+    for i in range(len(img_annIds)):
+        x, y, w, h = img_anns[i - 1]['bbox']  # 读取边框
+        image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 255), 2)
+
+    #plt.rcParams['figure.figsize'] = (20.0, 20.0)
+    plt.imshow(image)
+    coco.showAnns(img_anns)
+    plt.show()
