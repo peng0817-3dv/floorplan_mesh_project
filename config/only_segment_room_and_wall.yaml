@@ -112,3 +112,7 @@ discrete_size: 512
 
 use_confidence: False
 
+# loss_weight
+classify_loss_weight: 1
+angle_loss_weight: 0.1
+angle_loss_alpha: 1

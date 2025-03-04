@@ -11,7 +11,7 @@ from model.decoder import resnet34_decoder
 from model.encoder import GraphEncoder
 from trainer import create_conv_batch, step, create_trainer
 from util.misc import scale_vertices, normalize_vertices, shift_vertices
-
+from dataset.triangles import angle as angle_func
 
 class FPTriangleWithThreeClsNodes(FPTriangleNodes):
     def __init__(self, config, split, split_mode="ratio"):
@@ -100,17 +100,22 @@ class OnlySegmentRoomAndWall(pl.LightningModule):
         scheduler.step()  # type: ignore
         # 输入encoder(sage conv) 得到编码后的特征
         encoded_x = self.encoder(data.x, data.edge_index, data.batch)  # output shape: (N(triangle_num), 576)
-        # 关于data.batch的解释： https://blog.csdn.net/qq_45770988/article/details/129772968
-        # 将geometric_torch式的batch转化为普通totch式的batch
         encoded_x_conv, conv_mask = self.create_conv_batch(encoded_x, data.batch, self.config.batch_size)
         encoded_x_conv = encoded_x_conv.permute(0, 2, 1)  # shape: (B, dim, num_triangles) -> (B, num_triangles, dim)
         decoded_x_conv = self.post_quant(encoded_x_conv)
         # 此处变为B X max_graph_size X num_cls
-        decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-1])[conv_mask, :] # num_triangles x num_cls(32)
-        loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1), reduction='mean')
+        decoded_x = decoded_x_conv.reshape(-1, decoded_x_conv.shape[-1])[conv_mask, :] # num_triangles x num_cls
+        
+        # 计算损失
+        # 三角形分类损失（classify_loss）
+        classify_loss = torch.nn.functional.cross_entropy(decoded_x.reshape(-1, decoded_x.shape[-1]), data.y.reshape(-1), reduction='mean')
+        # 角度正则损失 (angle_loss)
+        angle_loss = self.angle_loss(data, decoded_x)
+        # 总损失
+        loss = self.config.angle_loss_weight * angle_loss + self.config.classify_loss_weight * classify_loss
 
         acc = self.get_accuracy(decoded_x, data.y) # 计算准确度
-        self.log("train/cross_entropy_loss", loss.item(), on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True,batch_size=self.config.batch_size)
+        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True,batch_size=self.config.batch_size)
         self.log("train/acc", acc.item(), on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True,batch_size=self.config.batch_size)
         loss = loss / self.config.gradient_accumulation_steps  # scale the loss to account for gradient accumulation
         self.manual_backward(loss)
@@ -119,6 +124,49 @@ class OnlySegmentRoomAndWall(pl.LightningModule):
             step(optimizer, [self.encoder, self.post_quant])
             optimizer.zero_grad(set_to_none=True)  # type: ignore
         self.log("lr", optimizer.param_groups[0]['lr'], on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)  # type: ignore
+
+    def angle_loss(self, data, decoded_x):
+        """
+        doc: 计算角度正则化损失
+        return: total_angle_loss: 角度正则化损失
+        """
+
+        # 1. 选出所有最大分类概率为room的三角形(及其索引)
+        softmax_decoded_x = torch.nn.functional.softmax(decoded_x, dim=1)  # 使用softmax得到不同分类的概率
+        max_probs, max_indices = torch.max(softmax_decoded_x, dim=1)
+        room_indices = torch.where(max_indices == 2)[0]
+
+        # 获取每个面的三个角 data.x_with_angle
+        vertices = data.x[:, :9].reshape(-1, 3, 3)  # 提取顶点坐标(128, 3, 3)
+        angles = angle_func(vertices)  # 计算内角 (128, 3)
+
+        # 2. 取它们的顶点(去重)
+        room_vertices = vertices[room_indices].reshape(-1, 3)  # (num_room_triangles * 3, 3)
+        room_angles = angles[room_indices].reshape(-1)  # (num_room_triangles * 3)
+        # 从 softmax_decoded_x 中提取出属于“room”类别的三角形的概率分布，并将每个三角形的概率分布重复 3 次，以对应每个三角形的 3 个顶点
+        room_decoded_x = softmax_decoded_x[room_indices].repeat_interleave(3, dim=0)  # (num_room_triangles * 3, num_cls)
+
+        # 3. 计算每个顶点的角度总和和融合概率特征
+        unique_vertices, inverse_indices = torch.unique(room_vertices, dim=0, return_inverse=True)
+        angle_merge = torch.zeros(unique_vertices.shape[0], dtype=torch.float32, device=room_vertices.device)
+        p_merge = torch.zeros(unique_vertices.shape[0], softmax_decoded_x.shape[1], dtype=torch.float32, device=room_vertices.device)
+
+        angle_merge.scatter_add_(0, inverse_indices, room_angles)
+        p_merge.scatter_add_(0, inverse_indices.unsqueeze(1).expand(-1, softmax_decoded_x.shape[1]), room_decoded_x)
+        p_merge = p_merge / torch.bincount(inverse_indices).unsqueeze(1).float()
+
+        # 4. angle_loss = p^alpha * min|θ - t|
+        t_values = torch.tensor([np.pi/2, np.pi, 3*np.pi/2, 2*np.pi], dtype=torch.float32, device=angle_merge.device)
+        alpha = self.config.angle_loss_alpha
+        total_angle_loss = 0
+
+        for angle_sum, p in zip(angle_merge, p_merge):
+            abs_diffs = torch.abs(angle_sum - t_values)
+            min_abs_diff = torch.min(abs_diffs)
+            angle_loss = p[2]**alpha * min_abs_diff
+            total_angle_loss += angle_loss
+
+        return total_angle_loss
 
     def validation_step(self, data, batch_idx):
         encoded_x = self.encoder(data.x, data.edge_index, data.batch)
