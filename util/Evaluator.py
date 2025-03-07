@@ -51,7 +51,6 @@ class Evaluator:
                     else:
                         kernel = np.ones((3, 3), np.uint8)
 
-                    # todo: for our method, the rooms share corners and edges, need to check here
                     pred_map1_er = cv2.erode(pred_map1, kernel)
                     pred_map2_er = cv2.erode(pred_map2, kernel)
 
