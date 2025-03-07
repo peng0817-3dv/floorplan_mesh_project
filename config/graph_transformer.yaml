@@ -127,3 +127,6 @@ ff_dropout: 0.0
 classify_loss_weight: 1
 angle_loss_weight: 0.1
 angle_loss_alpha: 1
+
+# COCO GT
+gt_coco_path: 'G:/workspace_plane2DDL/augment_point_cloud_density'

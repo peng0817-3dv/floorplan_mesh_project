@@ -1,10 +1,17 @@
 import math
+import os
 import queue
 from collections import defaultdict
+from datetime import datetime
 
+import numpy as np
 import trimesh
+from shapely import MultiPoint
 
-from util.s3d_data_load import enum_label
+from srcipt.generate_coco_stru3d import generate_coco_dict, generate_predict_coco_dict
+from util.s3d_data_load import enum_label, get_vertices_coord, get_faces_point_id_and_label
+from util.visualization import plot_floorplan_with_polygons, visualization_seg_with_custom_anno
+
 
 def is_connected(src, tgt, graph):
     q = queue.Queue()
@@ -35,10 +42,81 @@ class MergePolygonSolution:
         self._faces = []
         self._labels = []
         self._adjacent_graph = []
+        self._merged_polygons = []
+
+    def load_data_from_shp_file(self,shp_file_root):
+        points = get_vertices_coord(os.path.join(shp_file_root, 'vertexes.shp'))
+        faces, labels = get_faces_point_id_and_label(os.path.join(shp_file_root, 'poly.shp'))
+        self.load_data(points, faces, labels)
+
+    def load_data_from_model_inference(self,vertices,faces,labels):
+        self._points = [(v[0],v[1]) for v in vertices]
+        self._faces = [(f[0],f[1],f[2]) for f in faces]
+        self._labels = [int(l) for l in labels]
+
+
+    def load_data(self,points,faces,labels):
+        self._points = points
+        self._faces = faces
+        self._labels = labels
 
     def start_work(self):
         ajacent_graph = self.generate_adjacent_graph()
-        pass
+        groups = self.split_mesh(ajacent_graph)
+        self.merge_mesh(groups)
+        self.simplify_mesh()
+
+    def start_work_with_time_analysis(self):
+        start_time = datetime.now()
+        ajacent_graph = self.generate_adjacent_graph()
+        end_time_1 = datetime.now()
+        print("generate_adjacent_graph time:", (end_time_1 - start_time))
+        start_time = datetime.now()
+        groups = self.split_mesh(ajacent_graph)
+        end_time_2 = datetime.now()
+        print("split_mesh time:", (end_time_2 - start_time).total_seconds())
+        start_time = datetime.now()
+        self.merge_mesh(groups)
+        end_time_3 = datetime.now()
+        print("merge_mesh time:", (end_time_3 - start_time).total_seconds())
+        start_time = datetime.now()
+        self.simplify_mesh()
+        end_time_4 = datetime.now()
+        print("simplify_mesh time:", (end_time_4 - start_time).total_seconds())
+
+    def get_merged_polygons_with_coords(self):
+        result = []
+        for polygon in self._merged_polygons:
+            part = []
+            for point_id in polygon:
+                part.append(list(self._points[point_id]))
+            result.append(part)
+        return result
+
+    def get_merged_polygons_as_coco_format(self,cur_img_id):
+        multi_point = MultiPoint(self._points)
+        bbox = multi_point.bounds
+        rooms = self.get_merged_polygons_with_coords()
+        coco_dict = generate_predict_coco_dict(rooms, bbox, cur_img_id)
+        return coco_dict
+
+    def get_merged_polygons_as_raster_format(self):
+        mutli_point = MultiPoint(self._points)
+        bbox = mutli_point.bounds
+        rooms = self.get_merged_polygons_with_coords()
+
+        min_coord = np.array([bbox[0], bbox[1]])
+        max_coord = np.array([bbox[2], bbox[3]])
+
+        norm_rooms = []
+        img_res = np.array((256, 256))
+        for room in rooms:
+            norm_room = []
+            for point in room:
+                norm_point = np.round((point - min_coord) / (max_coord - min_coord) * img_res)
+                norm_room.append(norm_point)
+            norm_rooms.append(np.array(norm_room).astype(np.int32))
+        return norm_rooms
 
     def generate_adjacent_graph(self):
         polygon_id_around_point_table = defaultdict(set)
@@ -48,13 +126,55 @@ class MergePolygonSolution:
             polygon_id_around_point_table[triangle[1]].add(i)
             polygon_id_around_point_table[triangle[2]].add(i)
 
-        face_neighborhood = trimesh.Trimesh(vertices=self._points, faces=self._faces, process=False).face_neighborhood
+        mesh = trimesh.Trimesh(
+            vertices=self._points, faces=self._faces, process=False)
+
+
+        def get_shared_edge_neighbors(mesh, face_index):
+            """
+            获取与指定面共享边的相邻面。
+            :param mesh: trimesh.Trimesh 对象
+            :param face_index: 指定的面索引
+            :return: 共享边的相邻面索引列表
+            """
+            # 获取指定面的边
+            target_face = self._faces[face_index]
+            target_edges = [
+                [target_face[0],target_face[1]],
+                [target_face[1],target_face[2]],
+                [target_face[2],target_face[0]]]
+            # 用于存储共享边的相邻面
+            neighbors = set()
+
+            # 遍历所有面
+            for i, face in enumerate(mesh.faces):
+                if i == face_index:
+                    continue  # 跳过自身
+                # 获取当前面的边
+                current_faces = mesh.faces[i]
+                current_edges = [
+                    [current_faces[0],current_faces[1]],
+                    [current_faces[1],current_faces[2]],
+                    [current_faces[2],current_faces[0]]]
+
+                find = False
+                for edge in target_edges:
+                    if not find:
+                        for current_edge in current_edges:
+                            if sorted(edge) == sorted(current_edge):
+                                neighbors.add(i)
+                                find = True
+                                break
+                    else:
+                        break
+
+            return list(neighbors)
 
         adjacent_graph = [set() for _ in range(len(self._faces))]
         for i in range(len(self._faces)):
-            for j in face_neighborhood[i]:
-                adjacent_graph[i].add(j)
-                adjacent_graph[j].add(i)
+            neib = get_shared_edge_neighbors(mesh, i)
+            for j in range(len(neib)):
+                adjacent_graph[i].add(neib[j])
         return adjacent_graph
 
     def generate_around_point_adjacent_graph(self):
@@ -86,10 +206,11 @@ class MergePolygonSolution:
                 continue
 
             polygon_label = self._labels[polygon_id]
-            if polygon_label == enum_label.in_wall.value or polygon_label == enum_label.ceiling.value:
+            if polygon_label == enum_label.in_wall.value or polygon_label == enum_label.out_wall.value:
                 continue
             q = queue.Queue()
             split_polygons = {polygon_id}
+            q.put(polygon_id)
             while not q.empty():
                 cur_polygon_id = q.get()
                 visited[cur_polygon_id] = True
@@ -98,7 +219,7 @@ class MergePolygonSolution:
                         if self._labels[neighbor_id] == polygon_label:
                             split_polygons.add(neighbor_id)
                             q.put(neighbor_id)
-            if len(split_polygons) > 1:
+            if len(split_polygons) == 1:
                 continue
             groups.append(split_polygons)
         return groups
@@ -106,7 +227,8 @@ class MergePolygonSolution:
     def merge_mesh(self,groups):
         merged_polygons = []
         for group in groups:
-            pass
+            self._merged_polygons.append(self.reconstruct_mesh(group))
+
 
     def sort_neib_clockwise(self, center_id, neib_ids):
         center_point = self._points[center_id]
@@ -234,17 +356,72 @@ class MergePolygonSolution:
                     current_point = bound_points_neib[current_point][1]
                 else:
                     current_point = bound_points_neib[current_point][0]
-                pre_point = tmp
-                if current_point == pre_point:
+                if current_point == start_point:
                     break
+                pre_point = tmp
             polygons.append(polygon)
 
         chosen_polygon = -1
         chosen_polygon_size = 0
         for i in range(len(polygons)):
-            if len(polygons[i]) == 3:
+            if len(polygons[i]) > chosen_polygon_size:
+                chosen_polygon = i
+                chosen_polygon_size = len(polygons[i])
+
+        return polygons[chosen_polygon]
+
+    def simplify_mesh(self):
+        def calculate_vector_angle(p1, p2):
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            return math.atan2(dy, dx)
+
+        def is_colinear(pre, check_one, post):
+            pre_point = self._points[pre]
+            check_point = self._points[check_one]
+            post_point = self._points[post]
+            slope1 = calculate_vector_angle(pre_point, check_point)
+            slope2 = calculate_vector_angle(check_point, post_point)
+            return abs(slope1 - slope2) < 0.0001
+
+        for polygon_id, polygon in enumerate(self._merged_polygons):
+            simplified_polygon = []
+            for i in range(len(polygon)):
+                if i == 0:
+                    pre = len(polygon) - 1
+                else:
+                    pre = i - 1
+                post = (i + 1) % len(polygon)
+                if not is_colinear(polygon[pre], polygon[i], polygon[post]):
+                    simplified_polygon.append(polygon[i])
+
+            self._merged_polygons[polygon_id] = simplified_polygon
 
 
+def test_merge_polygon_with_mock_data():
+    points = [[0, 0], [2, 2], [0, 2], [-2, 2], [-2, 0],[0,-2],[2,-2],[2,0]]
+    faces = [[0, 3, 4], [0, 2, 3], [0, 1, 2], [0, 1, 7],[0,6,7],[0,5,6]]
+    labels = [enum_label.balcony.value] * 6
+    solution = MergePolygonSolution()
+    solution.load_data(points, faces, labels)
+    solution.start_work()
+    rooms = solution.get_merged_polygons_with_coords()
+    plot_floorplan_with_polygons(rooms)
 
 
+def test_merge_polygon():
+    start_time = datetime.now()
+    shp_file_root = r'G:\workspace_plane2DDL\testData\10_percent_box\scene_00020'
+    solution = MergePolygonSolution()
+    solution.load_data_from_shp_file(shp_file_root)
+    solution.start_work_with_time_analysis()
+    coco_dict = solution.get_merged_polygons_as_coco_format(20)
 
+    density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
+    img_folder = os.path.join(density_folder, 'train')
+    annotation_json_path = os.path.join(density_folder, 'annotations', 'train.json')
+
+    visualization_seg_with_custom_anno(20,img_path=img_folder,json_path=annotation_json_path,coco_anno_dict=coco_dict)
+
+if __name__ == '__main__':
+    test_merge_polygon()

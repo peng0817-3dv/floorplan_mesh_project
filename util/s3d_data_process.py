@@ -17,6 +17,32 @@ def process_vertice_by_op_record(reverse_op,vertices):
     return vertices
 
 
+def process_vertice_by_ori_bound(ori_bound,vertices):
+    # 找到每个坐标轴的最小值
+    min_coords = np.min(vertices, axis=0)  # 形状为 (3,)，分别是 x, y, z 的最小值
+    max_coords = np.max(vertices, axis=0)  # 形状为 (3,)，分别是 x, y, z 的最大值
+    x_range = max_coords[0] - min_coords[0]
+    y_range = max_coords[1] - min_coords[1]
+
+    # 将点集移动到原点(方便缩放)
+    centered_vertices = vertices - min_coords
+
+    # 缩放到目标尺寸
+    x_scale = (ori_bound[2] - ori_bound[0]) / x_range
+    y_scale = (ori_bound[3] - ori_bound[1]) / y_range
+    ori_scale_vertices_x = centered_vertices[:, 0] * x_scale
+    ori_scale_vertices_y = centered_vertices[:, 1] * y_scale
+    ori_scale_vertices = np.stack([ori_scale_vertices_x, ori_scale_vertices_y, centered_vertices[:, 2]], axis=-1)
+
+    # 移动到目标位置
+    ori_vertices = ori_scale_vertices + np.array([ori_bound[0], ori_bound[1], 0])
+
+    return ori_vertices
+
+
+
+
+
 def generate_augmented_point_cloud_density_map(scene_path, annotation_path,sacle_table):
     import laspy
     las_path = os.path.join(scene_path, 'scale.laz')

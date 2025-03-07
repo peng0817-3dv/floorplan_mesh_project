@@ -12,6 +12,7 @@ from matplotlib.collections import PolyCollection
 from matplotlib.colors import LinearSegmentedColormap
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from shapely import Polygon
 
 from dataset import newface_token, stopface_token, padface_token, sort_vertices_and_faces_and_labels_and_features
 import shapefile
@@ -30,6 +31,28 @@ PROPERTY_FACE_P0 = "pnt0"  # 三角面的顶点1的序号
 PROPERTY_FACE_P1 = "pnt1"  # 三角面的顶点2的序号
 PROPERTY_FACE_P2 = "pnt2"  # 三角面的顶点3的序号
 PROPERTY_FACE_LABEL = "label"  # 面片label
+
+
+colors_12 = [
+    "#e6194b",
+    "#3cb44b",
+    "#ffe119",
+    "#0082c8",
+    "#f58230",
+    "#911eb4",
+    "#46f0f0",
+    "#f032e6",
+    "#d2f53c",
+    "#fabebe",
+    "#008080",
+    "#e6beff",
+    "#aa6e28",
+    "#fffac8",
+    "#800000",
+    "#aaffc3",
+    "#808000",
+    "#ffd7b4"
+]
 
 
 def visualize_points(points, vis_path, colors=None):
@@ -393,8 +416,6 @@ def visualization_seg(num_image, json_path, img_path, str=' '):
     annIds = coco.getAnnIds(imgIds=img['id'], catIds=include_cat_ids, iscrowd=None)
     anns = coco.loadAnns(annIds)
 
-    # 读取在线图片的方法
-    # I = io.imread(img['coco_url'])
 
     plt.imshow(image,cmap="gray")
     coco.showAnns(anns)
@@ -414,6 +435,47 @@ def visualization_seg(num_image, json_path, img_path, str=' '):
     plt.axis('off')
 
     plt.show()
+
+
+def visualization_seg_with_custom_anno(num_image, json_path, img_path, coco_anno_dict):
+    # 需要画图的是第num副图片, 对应的json路径和图片路径,
+    # str = ' '为类别字符串，输入必须为字符串形式 'str'，若为空，则返回所有类别id
+    coco = COCO(json_path)
+
+    catIds = coco.getCatIds()  # 获取指定类别 id
+    exclude_cat_ids = [17,18]  # 替换为你要排除的类别 ID
+
+    # 使用列表推导式获取排除指定 ID 之外的所有类别 ID
+    include_cat_ids = [cat_id for cat_id in catIds if cat_id not in exclude_cat_ids]
+    # print(include_cat_ids)
+
+    imgIds = coco.getImgIds()  # 获取图片i
+    # print(catIds,imgIds)
+    img = coco.loadImgs(num_image)[0]  # 加载图片,loadImgs() 返回的是只有一个内嵌字典元素的list, 使用[0]来访问这个元素
+    image = io.imread(os.path.join(img_path,img['file_name']))
+    annIds = coco.getAnnIds(imgIds=img['id'], catIds=include_cat_ids, iscrowd=None)
+    ori_anns = coco.loadAnns(annIds)
+    anns = coco_anno_dict
+
+    plt.imshow(image,cmap="gray")
+    coco.showAnns(anns)
+
+    # cv2.imwrite(f"gt_on_densitymap/{imgIds[num_image - 1]}.png", image)
+    ax = plt.gca()
+    for i, ann in enumerate(anns):
+        # 假设每个标注都有一个中心点，这里我们简单地使用bbox的中心作为示例
+        bbox = ann['bbox']
+        x, y, w, h = bbox
+        center_x = x + w / 2
+        center_y = y + h / 2
+        # 添加顺序数字（根据需求调整位置和样式）
+        plt.text(center_x, center_y, i, color='red', fontsize=12, ha='center', va='center')
+
+    # 显示图像
+    plt.axis('off')
+
+    plt.show()
+
 
 
 def visualization_bbox1(num_image, json_path, img_path):  # 需要画的第num副图片， 对应的json路径和图片路径
@@ -477,3 +539,95 @@ def visualization_bbox_seg(num_image, json_path, img_path, *str):  # 需要画�
     plt.imshow(image)
     coco.showAnns(img_anns)
     plt.show()
+
+
+def plot_floorplan_with_polygons(add_coords_faces):
+    polygons = [
+        Polygon([point for point in room]) for room in add_coords_faces]
+    plt.figure()
+    colors = colors_12
+    for i,polygon in enumerate(polygons) :
+        x, y = polygon.exterior.xy
+        plt.fill(x, y, alpha=0.5, fc=colors[i % len(colors)], ec='black')  # 填充多边形
+        plt.plot(x, y, color='black')  # 绘制边界
+
+    # 设置图形属性
+    plt.title("Multiple Shapely Polygons")
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.grid(True)
+    plt.axis('equal')  # 确保坐标轴比例一致
+    plt.show()
+
+
+def plot_floorplan_with_regions(regions, corners=None, edges=None, scale=256):
+    """Draw floorplan map where different colors indicate different rooms
+    """
+    colors = colors_12
+
+    regions = [(region * scale / 256).round().astype(np.int_) for region in regions]
+
+    # define the color map
+    room_colors = [colors[i] for i in range(len(regions))]
+
+    colorMap = [tuple(int(h[i:i + 2], 16) for i in (1, 3, 5)) for h in room_colors]
+    colorMap = np.asarray(colorMap)
+    if len(regions) > 0:
+        colorMap = np.concatenate([np.full(shape=(1, 3), fill_value=0), colorMap], axis=0).astype(
+            np.uint8)
+    else:
+        colorMap = np.concatenate([np.full(shape=(1, 3), fill_value=0)], axis=0).astype(
+            np.uint8)
+    # when using opencv, we need to flip, from RGB to BGR
+    colorMap = colorMap[:, ::-1]
+
+    alpha_channels = np.zeros(colorMap.shape[0], dtype=np.uint8)
+    alpha_channels[1:len(regions) + 1] = 150
+
+    colorMap = np.concatenate([colorMap, np.expand_dims(alpha_channels, axis=-1)], axis=-1)
+
+    room_map = np.zeros([scale, scale]).astype(np.int32)
+    # sort regions
+    if len(regions) > 1:
+        avg_corner = [region.mean(axis=0) for region in regions]
+        ind = np.argsort(np.square(np.array(avg_corner)).sum(axis=1), axis=0)
+        regions = [regions[i] for i in ind]
+
+    for idx, polygon in enumerate(regions):
+        cv2.fillPoly(room_map, [polygon], color=idx + 1)
+
+    image = colorMap[room_map.reshape(-1)].reshape((scale, scale, 4))
+
+    pointColor = (0,0,0,255)
+    lineColor = (0,0,0,255)
+
+    for region in regions:
+        for i, point in enumerate(region):
+            if i == len(region)-1:
+                cv2.line(image, tuple(point), tuple(region[0]), color=lineColor, thickness=5)
+            else:
+                cv2.line(image, tuple(point), tuple(region[i+1]), color=lineColor, thickness=5)
+
+    for region in regions:
+        for i, point in enumerate(region):
+            cv2.circle(image, tuple(point), color=pointColor, radius=12, thickness=-1)
+            cv2.circle(image, tuple(point), color=(255, 255, 255, 0), radius=6, thickness=-1)
+
+    return image
+
+
+def plot_room_map(preds, room_map, im_size=256):
+    """Draw room polygons overlaid on the density map
+    """
+    for i, corner in enumerate(preds):
+        if i == len(preds) - 1:
+            cv2.line(room_map, (round(corner[0]), round(corner[1])), (round(preds[0][0]), round(preds[0][1])),
+                     (252, 252, 0), 2)
+        else:
+            cv2.line(room_map, (round(corner[0]), round(corner[1])), (round(preds[i + 1][0]), round(preds[i + 1][1])),
+                     (252, 252, 0), 2)
+        cv2.circle(room_map, (round(corner[0]), round(corner[1])), 2, (0, 0, 255), 2)
+        cv2.putText(room_map, str(i), (round(corner[0]), round(corner[1])), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4, (0, 255, 0), 1, cv2.LINE_AA)
+
+    return room_map

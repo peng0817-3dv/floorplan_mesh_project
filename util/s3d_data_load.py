@@ -79,6 +79,15 @@ global_label_colors = [
 'black'  # 32 in_wall
 ]
 
+
+def get_vertices_coord(vertices_file):
+    sf = shapefile.Reader(vertices_file)
+    shapes = sf.shapes()
+    # shapes中的每一个shape，其points属性中只有一个点，故通过points[0]可以拿到该点
+    # 因此points[0][0]拿到该点的x坐标，points[0][1]拿到该点的y坐标，我们用一个元组(px,py)来记录单个点
+    vertices = [(float(shape.points[0][0]), float(shape.points[0][1])) for shape in shapes]
+    return vertices
+
 def get_vertices_data(vertices_file):
     """
     从点shp文件中提取单个平面图中的所有点信息
@@ -142,6 +151,22 @@ def get_faces_coord(face_file):
             face.append((float(point[0]), float(point[1]), 0.0))
         faces.append(face)
     return faces
+
+
+def get_faces_point_id_and_label(face_file):
+    sf = shapefile.Reader(face_file)
+    records = sf.records()
+
+    # 使用一次遍历提取所有需要的信息
+    faces = []
+    faces_label = []
+
+    for r in records:
+        faces.append((r[PROPERTY_FACE_P0], r[PROPERTY_FACE_P1], r[PROPERTY_FACE_P2]))
+        label = r[PROPERTY_FACE_LABEL]
+        faces_label.append(label)
+
+    return faces, faces_label
 
 
 def get_faces_data(face_file):

@@ -115,7 +115,26 @@ def copy_GT_room_poly(anno_root, feature_root):
         bar.update(1)
     bar.close()
 
+
 def main_1():
+    root_dir = r"I:\s3dParseT5"
+    label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_anno"
+    result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_bbox_10_percent_shp"
+    point_cloud_name = "scale.laz"
+    label_name = "GT_room_poly.shp"
+    specific_scenes = ['scene_00001','scene_00011','scene_00020','scene_00030','scene_00040','scene_00050','scene_00060',
+                       'scene_00230','scene_00240','scene_00250']
+    # mesh_generate_specific(root_dir, label_dir, result_dir, point_cloud_name, label_name, specific_scenes=specific_scenes)
+    mesh_generate(root_dir, label_dir, result_dir, point_cloud_name, label_name)
+    failure_scene = check_failure_scene(result_dir)
+    remove_failure_scene(result_dir, failure_scene)
+    #
+    copy_GT_room_poly(label_dir, result_dir)
+    mxd_file = r"G:\workspace_plane2DDL\confidence_and_GT.mxd"
+    batch_copy_files(mxd_file, result_dir)
+
+
+def main_2():
     root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_pointcloud_scale_0.001"
     label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_anno_scale_0.001"
     result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\test_ori"
@@ -123,8 +142,8 @@ def main_1():
     label_name = "GT_room_poly.shp"
     specific_scenes = ['scene_00001','scene_00011','scene_00020','scene_00030','scene_00040','scene_00050','scene_00060',
                        'scene_00230','scene_00240','scene_00250']
-    mesh_generate_specific(root_dir, label_dir, result_dir, point_cloud_name, label_name, specific_scenes=specific_scenes)
-    # mesh_generate(root_dir, label_dir, result_dir, point_cloud_name, label_name)
+    # mesh_generate_specific(root_dir, label_dir, result_dir, point_cloud_name, label_name, specific_scenes=specific_scenes)
+    mesh_generate(root_dir, label_dir, result_dir, point_cloud_name, label_name)
     failure_scene = check_failure_scene(result_dir)
     remove_failure_scene(result_dir, failure_scene)
     #
@@ -134,18 +153,4 @@ def main_1():
 
 
 if __name__ == '__main__':
-    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_pointcloud_scale_0.001"
-    label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_anno_scale_0.001"
-    result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\test_ori"
-    point_cloud_name = "point_cloud.las"
-    label_name = "GT_room_poly.shp"
-    specific_scenes = ['scene_00001','scene_00011','scene_00020','scene_00030','scene_00040','scene_00050','scene_00060',
-                       'scene_00230','scene_00240','scene_00250']
-    mesh_generate_specific(root_dir, label_dir, result_dir, point_cloud_name, label_name, specific_scenes=specific_scenes)
-    # mesh_generate(root_dir, label_dir, result_dir, point_cloud_name, label_name)
-    failure_scene = check_failure_scene(result_dir)
-    remove_failure_scene(result_dir, failure_scene)
-    #
-    copy_GT_room_poly(label_dir, result_dir)
-    mxd_file = r"G:\workspace_plane2DDL\confidence_and_GT.mxd"
-    batch_copy_files(mxd_file, result_dir)
+    main_1()

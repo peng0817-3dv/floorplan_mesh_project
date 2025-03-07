@@ -290,7 +290,18 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
         faces = self.cached_faces[idx]
         confidence = self.extra_features[idx]
         labels = self.labels[idx]
-        reverse_op = []
+
+        x_coords = vertices[:, 0]  # 所有点的 x 坐标
+        y_coords = vertices[:, 1]  # 所有点的 y 坐标
+
+        # 计算最大和最小的 x 坐标
+        min_x = np.min(x_coords)
+        max_x = np.max(x_coords)
+
+        # 计算最大和最小的 y 坐标
+        min_y = np.min(y_coords)
+        max_y = np.max(y_coords)
+        ori_bound = [min_x,min_y,max_x,max_y]
         if self.scale_augment:
             if self.low_augment:
                 x_lims = (0.9, 1.1)
@@ -300,14 +311,10 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
                 x_lims = (0.75, 1.25)
                 y_lims = (0.75, 1.25)
                 z_lims = (0.75, 1.25)
-            vertices, scale_rev = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
-            reverse_op.append(['*', scale_rev])
-        vertices, rev_1, rev_2 = normalize_vertices(vertices)
-        reverse_op.append(['+', rev_1])
-        reverse_op.append(['*', rev_2])
+            vertices, _ = scale_vertices(vertices, x_lims=x_lims, y_lims=y_lims, z_lims=z_lims)
+        vertices, _, _ = normalize_vertices(vertices)
         if self.shift_augment:
-            vertices, shift_rev = shift_vertices(vertices)
-            reverse_op.append(['+', shift_rev])
+            vertices, _ = shift_vertices(vertices)
         # 注意该排序会同时做离散化操作
         vertices, faces,labels,confidence = \
             sort_vertices_and_faces_and_labels_and_features(vertices, faces, labels, confidence, self.discrete_size)
@@ -322,7 +329,7 @@ class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
         features = np.hstack([triangles, confidence, areas, angles, edge_len])
         face_neighborhood = np.array(trimesh.Trimesh(vertices=vertices, faces=faces, process=False).face_neighborhood)  # type: ignore
         target = self.adjust_labels(labels)
-        return features, target, vertices, faces, face_neighborhood,reverse_op
+        return features, target, vertices, faces, face_neighborhood,ori_bound
 
     @staticmethod
     def adjust_labels(labels):
