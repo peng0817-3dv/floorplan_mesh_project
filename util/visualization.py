@@ -541,7 +541,7 @@ def visualization_bbox_seg(num_image, json_path, img_path, *str):  # 需要画�
     plt.show()
 
 
-def plot_floorplan_with_polygons(add_coords_faces):
+def plot_floorplan_with_rooms_and_bound(add_coords_faces,bound,title="floorplan",save_path = None):
     polygons = [
         Polygon([point for point in room]) for room in add_coords_faces]
     plt.figure()
@@ -549,16 +549,45 @@ def plot_floorplan_with_polygons(add_coords_faces):
     for i,polygon in enumerate(polygons) :
         x, y = polygon.exterior.xy
         plt.fill(x, y, alpha=0.5, fc=colors[i % len(colors)], ec='black')  # 填充多边形
-        plt.plot(x, y, color='black')  # 绘制边界
+    bound = [
+        [bound[0],bound[1]],
+        [bound[2],bound[1]],
+        [bound[2],bound[3]],
+        [bound[0],bound[3]]]
+    bound = Polygon(bound)
+    x, y = bound.exterior.xy
+    plt.plot(x, y, color = 'black')  # 绘制边界
 
     # 设置图形属性
-    plt.title("Multiple Shapely Polygons")
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.grid(True)
+    plt.title(title)
     plt.axis('equal')  # 确保坐标轴比例一致
-    plt.show()
+    plt.axis('off') #
+    if save_path is not None:
+        plt.savefig(save_path)
+    plt.close()
 
+
+def plot_trimesh_with_labels(trimesh, labels, title="trimesh",save_path = None):
+    coords = []
+    for face in trimesh['faces']:
+        coord = [trimesh['vertices'][i] for i in face]
+        coords.append(coord)
+    polygons = [
+        Polygon(face) for face in coords]
+    plt.figure()
+    for i,polygon in enumerate(polygons) :
+        x, y = polygon.exterior.xy
+        plt.fill(x, y, alpha=1, fc=global_label_colors[labels[i] - 1], ec='gray',linewidth=0.2)  # 填充多边形
+        # plt.plot(x, y, color='white')  # 绘制边界
+
+    # 设置图形属性
+    plt.title(title)
+    plt.axis('equal')  # 确保坐标轴比例一致
+    plt.axis('off') #
+    # plt.show()
+    if save_path is not None:
+        plt.savefig(save_path,dpi=300)
+    plt.close()
 
 def plot_floorplan_with_regions(regions, corners=None, edges=None, scale=256):
     """Draw floorplan map where different colors indicate different rooms

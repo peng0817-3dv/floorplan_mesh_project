@@ -16,8 +16,7 @@ from util.Evaluator import Evaluator
 from util.merge_polygon import MergePolygonSolution
 from util.s3d_data_load import read_s3d_mesh_info
 from util.s3d_data_process import process_vertice_by_op_record, process_vertice_by_ori_bound
-from util.visualization import export_mesh_to_shp, plot_vertices_and_faces_with_labels, export_mesh_to_obj, \
-    plot_ground_truth_and_prediction, plot_floorplan_with_regions, plot_room_map
+from util.visualization import plot_trimesh_with_labels, plot_floorplan_with_rooms_and_bound
 import hydra
 from dataset.floorplan_triangles import FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes
 from util.misc import scale_vertices, normalize_vertices, shift_vertices
@@ -41,6 +40,13 @@ def main(config):
     targets = targets + 1
     targets = np.where(targets == 2, 31, targets)
     targets = np.where(targets == 3, 32, targets)
+    vertices = process_vertice_by_ori_bound(vertices=vertices,ori_bound=ori_bound)
+    trimesh = {
+        'vertices': vertices,
+        'faces': faces,
+    }
+    plot_trimesh_with_labels(trimesh, targets, save_path=f"test_gt_mesh.png")
+
 
     # 提取多边形
     merged_solution = MergePolygonSolution()
@@ -50,47 +56,50 @@ def main(config):
         labels=targets,
     )
     merged_solution.start_work()
-    predict_rooms = merged_solution.get_merged_polygons_as_raster_format()
-
-    density_folder = config.gt_coco_path
-    mock_img_folder = os.path.join(density_folder, 'test')
-    mock_json_path = os.path.join(density_folder, 'annotations', 'test.json')
-
-    density, gt_polygons_list = parse_coco_dict(
-        json_path=mock_json_path,
-        img_path=mock_img_folder,
-        num_scenes=scene_num,
-    )
-    gt_data = {
-        'density':density,
-        'polygons_list':gt_polygons_list
-    }
-
-    cur_scene_eval = Evaluator(gt_data)
-    quan_result_dict =cur_scene_eval.evaluate_scene(predict_rooms)
-    print(quan_result_dict)
-
-    plot_pred = True
-    plot_density = True
-    room_polys = predict_rooms
-
-    if plot_pred:
-        # plot regular room floorplan # 绘制纯矢量图（不带密度图背景）
-        room_polys = [np.array(r) for r in room_polys]
-        floorplan_map = plot_floorplan_with_regions(room_polys, scale=1000)
-        cv2.imwrite('{}_pred_floorplan.png'.format(scene_name), floorplan_map)
-    if plot_density:
-        # density shape: (256, 256)
-        density_map = np.expand_dims(density, axis=-1)
-        density_map = np.repeat(density_map, 3, axis=2)
-        pred_room_map = np.zeros([256, 256, 3])
-
-        for room_poly in room_polys:
-            pred_room_map = plot_room_map(room_poly, pred_room_map)
-
-        # plot predicted polygon overlaid on the density map
-        pred_room_map = np.clip(pred_room_map + density_map, 0, 255)
-        cv2.imwrite('{}_pred_room_map.png'.format(scene_name), pred_room_map)
+    merged_rooms = merged_solution.get_merged_polygons_with_coords()
+    plot_floorplan_with_rooms_and_bound(merged_rooms,ori_bound,save_path=f"test_merged_rooms.png")
+    # predict_rooms = merged_solution.get_merged_polygons_as_raster_format()
+    #
+    # density_folder = config.gt_coco_path
+    # density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
+    # mock_img_folder = os.path.join(density_folder, 'test')
+    # mock_json_path = os.path.join(density_folder, 'annotations', 'test.json')
+    #
+    # density, gt_polygons_list = parse_coco_dict(
+    #     json_path=mock_json_path,
+    #     img_path=mock_img_folder,
+    #     num_scenes=scene_num,
+    # )
+    # gt_data = {
+    #     'density':density,
+    #     'polygons_list':gt_polygons_list
+    # }
+    #
+    # cur_scene_eval = Evaluator(gt_data)
+    # quan_result_dict =cur_scene_eval.evaluate_scene(predict_rooms)
+    # print(quan_result_dict)
+    #
+    # plot_pred = True
+    # plot_density = True
+    # room_polys = predict_rooms
+    #
+    # if plot_pred:
+    #     # plot regular room floorplan # 绘制纯矢量图（不带密度图背景）
+    #     room_polys = [np.array(r) for r in room_polys]
+    #     floorplan_map = plot_floorplan_with_regions(room_polys, scale=1000)
+    #     cv2.imwrite('{}_pred_floorplan.png'.format(scene_name), floorplan_map)
+    # if plot_density:
+    #     # density shape: (256, 256)
+    #     density_map = np.expand_dims(density, axis=-1)
+    #     density_map = np.repeat(density_map, 3, axis=2)
+    #     pred_room_map = np.zeros([256, 256, 3])
+    #
+    #     for room_poly in room_polys:
+    #         pred_room_map = plot_room_map(room_poly, pred_room_map)
+    #
+    #     # plot predicted polygon overlaid on the density map
+    #     pred_room_map = np.clip(pred_room_map + density_map, 0, 255)
+    #     cv2.imwrite('{}_pred_room_map.png'.format(scene_name), pred_room_map)
 
     # plot_ground_truth_and_prediction(
     #     vertices=vertices, faces=faces,
@@ -102,6 +111,7 @@ def main(config):
     #     vertices=vertices, faces=faces,labels=targets,
     #     output_path=f"test_shpfile_predict")
     print("done")
+
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,7 @@
+import json
 import os
 import sys
+import time
 
 import cv2
 import numpy as np
@@ -8,7 +10,9 @@ from shapely import Polygon
 from srcipt.generate_coco_stru3d import parse_coco_dict
 from util.Evaluator import Evaluator
 from util.merge_polygon import MergePolygonSolution
-from util.visualization import plot_floorplan_with_regions, plot_room_map
+from util.s3d_data_process import process_vertice_by_ori_bound
+from util.visualization import plot_floorplan_with_regions, plot_room_map, plot_trimesh_with_labels, \
+    plot_floorplan_with_rooms_and_bound
 
 curPath = os.path.abspath(os.path.dirname(__file__))
 rootPath = os.path.split(curPath)[0]
@@ -35,6 +39,11 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
         os.makedirs(predict_path_root)
         print(f"make dir {predict_path_root}")
 
+    trimesh_predict_path = os.path.join(predict_path_root, "trimesh_predict")
+    if not os.path.exists(trimesh_predict_path):
+        os.makedirs(trimesh_predict_path)
+
+
     # model = TriangleTokenizationGraphConv(config)
     model = GraphTransformerEncoder.load_from_checkpoint(checkpoint_path=load_checkpoint_path)
     model.eval()
@@ -43,21 +52,33 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
     scene_counter = 0
     progress_bar = tqdm(total=total_task_num, desc="Inference")
     error_scene = []
+    time_record = []
     for idx in range(total_task_num):
         data = dataset.get(idx)
         # 训练时，为了方便索引，类别从0开始
-        _, targets, vertices, faces, _, op = dataset.get_all_features_for_shape(idx)
+        _, targets, vertices, faces, _, ori_bound = dataset.get_all_features_for_shape(idx)
         scene_name = dataset.get_name(idx)
         scene_num = int(scene_name.split("_")[1])
+        start_time = time.perf_counter()
         predict = model.inference_data(data)
+        execution_time = time.perf_counter() - start_time
+        time_record.append(execution_time)
         predict = np.where(predict == 2, 31, predict)
         predict = np.where(predict == 3, 32, predict)
+
+        vertices = process_vertice_by_ori_bound(vertices=vertices, ori_bound=ori_bound)
+        trimesh = {
+            'vertices': vertices,
+            'faces': faces,
+        }
+        # plot_trimesh_with_labels(trimesh, targets, save_path=f"test_gt_mesh.png")
 
         # 提取多边形
         merged_solution = MergePolygonSolution()
         try:
             merged_solution.load_data_from_model_inference(vertices, faces, predict)
             merged_solution.start_work()
+            standard_polygons = merged_solution.get_merged_polygons_with_coords()
             predict_rooms = merged_solution.get_merged_polygons_as_raster_format()
         except Exception as e:
             print(f"scene_name:{scene_name} failed to reconstruct polygons.error:{e}")
@@ -120,16 +141,43 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
             # plot predicted polygon overlaid on the density map
             pred_room_map = np.clip(pred_room_map + density_map, 0, 255)
             cv2.imwrite(os.path.join(predict_path_root, '{}_pred_room_map.png'.format(scene_name)), pred_room_map)
-
+        if idx % 10 == 0:
+            # plot trimesh
+            plot_trimesh_with_labels(trimesh=trimesh, labels=predict,
+                                     save_path=os.path.join(trimesh_predict_path, f"{scene_name}_trimesh.png"))
+            # plot floorplan
+            plot_floorplan_with_rooms_and_bound(standard_polygons, ori_bound,
+                                                save_path=os.path.join(trimesh_predict_path, f"{scene_name}_floorplan.png"))
         progress_bar.update(1)
 
+    # 求平均
+    for k in quant_result_dict.keys():
+        quant_result_dict[k] /= float(scene_counter)
+
+    metric_category = ['room','corner','angles']
+
+    for metric in metric_category:
+        prec = quant_result_dict[metric+'_prec']
+        rec = quant_result_dict[metric+'_rec']
+        f1 = 2*prec*rec/(prec+rec)
+        quant_result_dict[metric+'_f1'] = f1
+
+    quant_result_dict['time_avg'] = sum(time_record)/len(time_record)
+
+    print("*************************************************")
+    print(quant_result_dict)
+    print(f"error_scene:{error_scene}")
+    print("*************************************************")
+
+    with open(os.path.join(predict_path_root, 'results.txt'), 'w') as file:
+        file.write(json.dumps(quant_result_dict))
 
 @hydra.main(config_path='../config', config_name='graph_transformer', version_base='1.2')
 def main(config):
     load_checkpoint_path = config.load_checkpoint_path
     if config.inference_dataset_path is None:
         print("inference_dataset_path:None，user test part of train model dataset")
-        dataset = FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes(config, 'test')
+        dataset = FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes(config, 'test','scene_name')
     else:
         print(f"inference_dataset_path:{config.inference_dataset_path},but currently not support across dataset inference")
         return

@@ -10,7 +10,7 @@ from shapely import MultiPoint
 
 from srcipt.generate_coco_stru3d import generate_coco_dict, generate_predict_coco_dict
 from util.s3d_data_load import enum_label, get_vertices_coord, get_faces_point_id_and_label
-from util.visualization import plot_floorplan_with_polygons, visualization_seg_with_custom_anno
+from util.visualization import visualization_seg_with_custom_anno
 
 
 def is_connected(src, tgt, graph):
@@ -229,7 +229,6 @@ class MergePolygonSolution:
         for group in groups:
             self._merged_polygons.append(self.reconstruct_mesh(group))
 
-
     def sort_neib_clockwise(self, center_id, neib_ids):
         center_point = self._points[center_id]
         points_with_angles = []
@@ -406,7 +405,7 @@ def test_merge_polygon_with_mock_data():
     solution.load_data(points, faces, labels)
     solution.start_work()
     rooms = solution.get_merged_polygons_with_coords()
-    plot_floorplan_with_polygons(rooms)
+
 
 
 def test_merge_polygon():
@@ -417,11 +416,11 @@ def test_merge_polygon():
     solution.start_work_with_time_analysis()
     coco_dict = solution.get_merged_polygons_as_coco_format(20)
 
-    density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
-    img_folder = os.path.join(density_folder, 'train')
-    annotation_json_path = os.path.join(density_folder, 'annotations', 'train.json')
-
-    visualization_seg_with_custom_anno(20,img_path=img_folder,json_path=annotation_json_path,coco_anno_dict=coco_dict)
+    # density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
+    # img_folder = os.path.join(density_folder, 'train')
+    # annotation_json_path = os.path.join(density_folder, 'annotations', 'train.json')
+    #
+    # visualization_seg_with_custom_anno(20,img_path=img_folder,json_path=annotation_json_path,coco_anno_dict=coco_dict)
 
 if __name__ == '__main__':
-    test_merge_polygon()
+    test_merge_polygon_with_mock_data()

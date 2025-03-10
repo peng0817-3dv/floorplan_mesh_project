@@ -317,11 +317,11 @@ def main():
 
 def visualize_result():
     out_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
-    img_folder = os.path.join(out_folder, 'train')
-    annotation_json_path = os.path.join(out_folder, 'annotations', 'train.json')
-    visualization_seg(20, annotation_json_path, img_folder)#2104
+    img_folder = os.path.join(out_folder, 'test')
+    annotation_json_path = os.path.join(out_folder, 'annotations', 'test.json')
+    r1,r2 = parse_coco_dict(annotation_json_path, img_folder, 3025)
+    visualization_seg(3025, annotation_json_path, img_folder)#2104
 
 if __name__ == '__main__':
-    main()
-
+    visualize_result()
 
