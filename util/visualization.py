@@ -577,7 +577,11 @@ def plot_trimesh_with_labels(trimesh, labels, title="trimesh",save_path = None):
     plt.figure()
     for i,polygon in enumerate(polygons) :
         x, y = polygon.exterior.xy
-        plt.fill(x, y, alpha=1, fc=global_label_colors[labels[i] - 1], ec='gray',linewidth=0.2)  # 填充多边形
+        try:
+            plt.fill(x, y, alpha=1, fc=global_label_colors[labels[i] - 1], ec='gray',linewidth=0.2)  # 填充多边形
+        except Exception as e:
+            print(e)
+            return
         # plt.plot(x, y, color='white')  # 绘制边界
 
     # 设置图形属性

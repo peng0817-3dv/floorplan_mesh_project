@@ -1,6 +1,6 @@
 # data
 dataset: 'shapenet'
-dataset_root: 'G:/workspace_plane2DDL/RefCode/meshgpt-official-version/MeshGPT/data/structure3d'
+dataset_root: 'G:/workspace_plane2DDL/real_point_cloud_dataset/augment_stru3d_bbox_10_percent_shp'
 train_split_file: 'train.txt'
 val_split_file: 'val.txt'
 test_split_file: 'test.txt'

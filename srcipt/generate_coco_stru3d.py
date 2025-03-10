@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 
@@ -9,7 +10,8 @@ from tqdm import tqdm
 from shapely.geometry import Polygon
 from util.s3d_data_process import read_scale_table, generate_augmented_point_cloud_density_map, export_density
 from util.visualization import visualization_seg
-from skimage import io
+from skimage import io as skimage_io
+import io
 
 type2id = {'living room': 0, 'kitchen': 1, 'bedroom': 2, 'bathroom': 3, 'balcony': 4, 'corridor': 5,
             'dining room': 6, 'study': 7, 'studio': 8, 'store room': 9, 'garden': 10, 'laundry room': 11,
@@ -200,7 +202,8 @@ def generate_coco_dict(annos, polygons, curr_instance_id, curr_img_id, ignore_ty
 
 def parse_coco_dict(json_path, img_path, num_scenes):
 
-    coco = COCO(json_path)
+    with contextlib.redirect_stdout(io.StringIO()):
+        coco = COCO(json_path) # 静默加载
     catIds = coco.getCatIds()  # 获取指定类别 id
     exclude_cat_ids = [17,18]  # 替换为你要排除的类别 ID
     # 使用列表推导式获取排除指定 ID 之外的所有类别 ID
@@ -209,7 +212,7 @@ def parse_coco_dict(json_path, img_path, num_scenes):
     imgIds = coco.getImgIds()  # 获取图片i
 
     img = coco.loadImgs(num_scenes)[0]  # 加载图片,loadImgs() 返回的是只有一个内嵌字典元素的list, 使用[0]来访问这个元素
-    image = io.imread(os.path.join(img_path,img['file_name']))
+    image = skimage_io.imread(os.path.join(img_path,img['file_name']))
     annIds = coco.getAnnIds(imgIds=img['id'], catIds=include_cat_ids, iscrowd=None)
     anns = coco.loadAnns(annIds)
     gt_polygons_list = []

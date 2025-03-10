@@ -6,7 +6,7 @@ from datetime import datetime
 
 import numpy as np
 import trimesh
-from shapely import MultiPoint
+from shapely import MultiPoint, Polygon, unary_union, MultiPolygon
 
 from srcipt.generate_coco_stru3d import generate_coco_dict, generate_predict_coco_dict
 from util.s3d_data_load import enum_label, get_vertices_coord, get_faces_point_id_and_label
@@ -60,11 +60,17 @@ class MergePolygonSolution:
         self._faces = faces
         self._labels = labels
 
-    def start_work(self):
+    def start_work_2(self):
         ajacent_graph = self.generate_adjacent_graph()
         groups = self.split_mesh(ajacent_graph)
         self.merge_mesh(groups)
         self.simplify_mesh()
+
+    def start_work(self):
+        ajacent_graph = self.generate_adjacent_graph()
+        groups = self.split_mesh(ajacent_graph)
+        self.merge_mesh_with_shapely(groups)
+        self.simplify_mesh_2()
 
     def start_work_with_time_analysis(self):
         start_time = datetime.now()
@@ -85,13 +91,7 @@ class MergePolygonSolution:
         print("simplify_mesh time:", (end_time_4 - start_time).total_seconds())
 
     def get_merged_polygons_with_coords(self):
-        result = []
-        for polygon in self._merged_polygons:
-            part = []
-            for point_id in polygon:
-                part.append(list(self._points[point_id]))
-            result.append(part)
-        return result
+        return self._merged_polygons
 
     def get_merged_polygons_as_coco_format(self,cur_img_id):
         multi_point = MultiPoint(self._points)
@@ -210,15 +210,16 @@ class MergePolygonSolution:
                 continue
             q = queue.Queue()
             split_polygons = {polygon_id}
+            visited[polygon_id] = True
             q.put(polygon_id)
             while not q.empty():
                 cur_polygon_id = q.get()
-                visited[cur_polygon_id] = True
                 for neighbor_id in graph[cur_polygon_id]:
                     if not visited[neighbor_id]:
                         if self._labels[neighbor_id] == polygon_label:
                             split_polygons.add(neighbor_id)
                             q.put(neighbor_id)
+                            visited[neighbor_id] = True
             if len(split_polygons) == 1:
                 continue
             groups.append(split_polygons)
@@ -228,6 +229,10 @@ class MergePolygonSolution:
         merged_polygons = []
         for group in groups:
             self._merged_polygons.append(self.reconstruct_mesh(group))
+
+    def merge_mesh_with_shapely(self,groups):
+        for group in groups:
+            self._merged_polygons.append(self.reconstruct_mesh_depend_shapely(group))
 
     def sort_neib_clockwise(self, center_id, neib_ids):
         center_point = self._points[center_id]
@@ -242,6 +247,26 @@ class MergePolygonSolution:
         sorted_neib_ids = [x[0] for x in points_with_angles]
         neib_ids = sorted_neib_ids
         return neib_ids
+
+    def reconstruct_mesh_depend_shapely(self,group):
+        polygons = []
+        for face_id in group:
+            face = self._faces[face_id]
+            polygon = Polygon([self._points[point_id] for point_id in face])
+            polygons.append(polygon)
+        union = unary_union(polygons)
+        # 提取外轮廓
+        if isinstance(union, MultiPolygon):
+            # 如果有多个独立的外轮廓
+            exterior_coords = [list(poly.exterior.coords) for poly in union.geoms]
+        else:
+            # 如果只有一个外轮廓
+            exterior_coords = [list(union.exterior.coords)]
+        union_areas = [Polygon(coords).area for coords in exterior_coords]
+        max_area_id = union_areas.index(max(union_areas))
+        exterior_coords = exterior_coords[max_area_id]
+        exterior_coords.pop()
+        return exterior_coords
 
     def reconstruct_mesh(self,group):
         edge_count = defaultdict(int)
@@ -271,52 +296,53 @@ class MergePolygonSolution:
 
         for point_id, neib_ids in bound_points_neib.items():
             if len(neib_ids) != 2 and len(neib_ids) != 4:
-                return []
+                raise ValueError("The mesh is not a 2-manifold")
             if len(neib_ids) == 4:
-                degenerate_point = point_id
-                sorted_neib_ids = self.sort_neib_clockwise(degenerate_point, neib_ids)
-                degenerate_neib = []
-
-                for edge, count in edge_count.items():
-                    if edge[0] == degenerate_point or edge[1] == degenerate_point:
-                        if edge[0] != degenerate_point:
-                            degenerate_neib.append(edge[1])
-                        else:
-                            degenerate_neib.append(edge[0])
-
-                degenerate_neib_num = len(degenerate_neib)
-                degenerate_neib_index = defaultdict(int)
-                for i in range(degenerate_neib_num):
-                    degenerate_neib_index[degenerate_neib[i]] = i
-
-                neib_graph_without_target_point = [[0 for _ in range(degenerate_neib_num)]
-                                                   for _ in range(degenerate_neib_num)]
-                for edge, count in edge_count.items():
-                    if edge[0] in degenerate_neib_index and edge[1] in degenerate_neib_index:
-                        neib_graph_without_target_point[degenerate_neib_index[edge[0]]][degenerate_neib_index[edge[1]]] = 1
-                        neib_graph_without_target_point[degenerate_neib_index[edge[1]]][degenerate_neib_index[edge[0]]] = 1
-
-                v0 = degenerate_neib_index[neib_ids[0]]
-                v1 = degenerate_neib_index[neib_ids[1]]
-                v2 = degenerate_neib_index[neib_ids[2]]
-                v3 = degenerate_neib_index[neib_ids[3]]
-
-                to_process_info = []
-                to_process_info.append(degenerate_point)
-                if is_connected(v0, v1, neib_graph_without_target_point) and\
-                   is_connected(v1, v2, neib_graph_without_target_point):
-                    to_process_info.append(neib_ids[0])
-                    to_process_info.append(neib_ids[3])
-                    to_process_info.append(neib_ids[1])
-                    to_process_info.append(neib_ids[2])
-                elif is_connected(v0, v3, neib_graph_without_target_point) and\
-                     is_connected(v1, v2, neib_graph_without_target_point):
-                    to_process_info.append(neib_ids[0])
-                    to_process_info.append(neib_ids[1])
-                    to_process_info.append(neib_ids[2])
-                    to_process_info.append(neib_ids[3])
-
-                to_process_infos.append(to_process_info)
+                raise ValueError("The mesh is not a 2-manifold")
+                # degenerate_point = point_id
+                # sorted_neib_ids = self.sort_neib_clockwise(degenerate_point, neib_ids)
+                # degenerate_neib = []
+                #
+                # for edge, count in edge_count.items():
+                #     if edge[0] == degenerate_point or edge[1] == degenerate_point:
+                #         if edge[0] != degenerate_point:
+                #             degenerate_neib.append(edge[1])
+                #         else:
+                #             degenerate_neib.append(edge[0])
+                #
+                # degenerate_neib_num = len(degenerate_neib)
+                # degenerate_neib_index = defaultdict(int)
+                # for i in range(degenerate_neib_num):
+                #     degenerate_neib_index[degenerate_neib[i]] = i
+                #
+                # neib_graph_without_target_point = [[0 for _ in range(degenerate_neib_num)]
+                #                                    for _ in range(degenerate_neib_num)]
+                # for edge, count in edge_count.items():
+                #     if edge[0] in degenerate_neib_index and edge[1] in degenerate_neib_index:
+                #         neib_graph_without_target_point[degenerate_neib_index[edge[0]]][degenerate_neib_index[edge[1]]] = 1
+                #         neib_graph_without_target_point[degenerate_neib_index[edge[1]]][degenerate_neib_index[edge[0]]] = 1
+                #
+                # v0 = degenerate_neib_index[neib_ids[0]]
+                # v1 = degenerate_neib_index[neib_ids[1]]
+                # v2 = degenerate_neib_index[neib_ids[2]]
+                # v3 = degenerate_neib_index[neib_ids[3]]
+                #
+                # to_process_info = []
+                # to_process_info.append(degenerate_point)
+                # if is_connected(v0, v1, neib_graph_without_target_point) and\
+                #    is_connected(v1, v2, neib_graph_without_target_point):
+                #     to_process_info.append(neib_ids[0])
+                #     to_process_info.append(neib_ids[3])
+                #     to_process_info.append(neib_ids[1])
+                #     to_process_info.append(neib_ids[2])
+                # elif is_connected(v0, v3, neib_graph_without_target_point) and\
+                #      is_connected(v1, v2, neib_graph_without_target_point):
+                #     to_process_info.append(neib_ids[0])
+                #     to_process_info.append(neib_ids[1])
+                #     to_process_info.append(neib_ids[2])
+                #     to_process_info.append(neib_ids[3])
+                #
+                # to_process_infos.append(to_process_info)
 
         for to_process_info in to_process_infos:
             target_point = to_process_info[0]
@@ -396,6 +422,30 @@ class MergePolygonSolution:
 
             self._merged_polygons[polygon_id] = simplified_polygon
 
+    def simplify_mesh_2(self):
+        def calculate_vector_angle(p1, p2):
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            return math.atan2(dy, dx)
+
+        def is_colinear(pre, check_one, post):
+            slope1 = calculate_vector_angle(pre, check_one)
+            slope2 = calculate_vector_angle(check_one, post)
+            return abs(slope1 - slope2) < 0.0001
+
+        for polygon_id, polygon in enumerate(self._merged_polygons):
+            simplified_polygon = []
+            for i in range(len(polygon)):
+                if i == 0:
+                    pre = len(polygon) - 1
+                else:
+                    pre = i - 1
+                post = (i + 1) % len(polygon)
+                if not is_colinear(polygon[pre], polygon[i], polygon[post]):
+                    simplified_polygon.append(polygon[i])
+
+            self._merged_polygons[polygon_id] = simplified_polygon
+
 
 def test_merge_polygon_with_mock_data():
     points = [[0, 0], [2, 2], [0, 2], [-2, 2], [-2, 0],[0,-2],[2,-2],[2,0]]
@@ -406,14 +456,12 @@ def test_merge_polygon_with_mock_data():
     solution.start_work()
     rooms = solution.get_merged_polygons_with_coords()
 
-
-
 def test_merge_polygon():
     start_time = datetime.now()
     shp_file_root = r'G:\workspace_plane2DDL\testData\10_percent_box\scene_00020'
     solution = MergePolygonSolution()
     solution.load_data_from_shp_file(shp_file_root)
-    solution.start_work_with_time_analysis()
+    solution.start_work()
     coco_dict = solution.get_merged_polygons_as_coco_format(20)
 
     # density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
@@ -423,4 +471,4 @@ def test_merge_polygon():
     # visualization_seg_with_custom_anno(20,img_path=img_folder,json_path=annotation_json_path,coco_anno_dict=coco_dict)
 
 if __name__ == '__main__':
-    test_merge_polygon_with_mock_data()
+    test_merge_polygon()

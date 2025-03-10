@@ -1,80 +1,58 @@
 import json
 import os
-import sys
-import time
 
 import cv2
 import numpy as np
 from shapely import Polygon
+from tqdm import tqdm
 
+from dataset.floorplan_triangles import FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes
 from srcipt.generate_coco_stru3d import parse_coco_dict
 from util.Evaluator import Evaluator
 from util.merge_polygon import MergePolygonSolution
 from util.s3d_data_process import process_vertice_by_ori_bound
+import hydra
+
 from util.visualization import plot_floorplan_with_regions, plot_room_map, plot_trimesh_with_labels, \
     plot_floorplan_with_rooms_and_bound
 
-curPath = os.path.abspath(os.path.dirname(__file__))
-rootPath = os.path.split(curPath)[0]
-sys.path.append(rootPath)
-import hydra
-from dataset.floorplan_triangles import FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes
-from trainer.train_triangle import GraphTransformerEncoder
-from tqdm import tqdm
 
-
-def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_density=False):
-    save_inference_path = config.save_inference_path
-    # checkpoint_path = os.path.join(load_model_experiment_path, "checkpoints", load_checkpoint_name)
-
-    # if save_path is None, use the same dir as the checkpoint
-    if save_inference_path is None:
-        load_checkpoint_root = os.path.dirname(load_checkpoint_path)
-        checkpoint_name = os.path.basename(load_checkpoint_path).split(".")[0]
-        save_inference_path = os.path.join(load_checkpoint_root, f"inference_from_{checkpoint_name}")
-    predict_path_root = save_inference_path  # rename
-
-    print(predict_path_root)
-    if not os.path.exists(predict_path_root):
-        os.makedirs(predict_path_root)
-        print(f"make dir {predict_path_root}")
+def eval_core(config, predict_json_path, dataset,plot_pred=False, plot_density=False,plot_gt=False):
+    predict_path_root = predict_json_path # 同名
+    predict_json = os.path.join(predict_path_root, 'predict.txt')
+    predict_dict = json.load(open(predict_json, 'r'))
 
     trimesh_predict_path = os.path.join(predict_path_root, "trimesh_predict")
     if not os.path.exists(trimesh_predict_path):
         os.makedirs(trimesh_predict_path)
+
     error_polygon_construct_path = os.path.join(predict_path_root, "error_polygon_construct")
     if not os.path.exists(error_polygon_construct_path):
         os.makedirs(error_polygon_construct_path)
 
-    # model = TriangleTokenizationGraphConv(config)
-    model = GraphTransformerEncoder.load_from_checkpoint(checkpoint_path=load_checkpoint_path)
-    model.eval()
-    total_task_num = len(dataset)
+    total_task_num = len(predict_dict.keys())
     quant_result_dict = None
     scene_counter = 0
     progress_bar = tqdm(total=total_task_num, desc="Inference")
     error_scene = []
     time_record = []
-
     for idx in range(total_task_num):
+
         data = dataset.get(idx)
         # 训练时，为了方便索引，类别从0开始
         _, targets, vertices, faces, _, ori_bound = dataset.get_all_features_for_shape(idx)
         scene_name = dataset.get_name(idx)
         scene_num = int(scene_name.split("_")[1])
-        start_time = time.time()
-        predict = model.inference_data(data)
-        execution_time = time.time() - start_time
-        time_record.append(execution_time)
-        predict = np.where(predict == 2, 31, predict)
-        predict = np.where(predict == 3, 32, predict)
+        progress_bar.set_description(f"processing scene: {scene_name} #idx{idx}")
+        predict = predict_dict[scene_name]
+        predict = np.array(predict)
         predict = np.where(predict == 4, 32, predict)
-
         vertices = process_vertice_by_ori_bound(vertices=vertices, ori_bound=ori_bound)
         trimesh = {
             'vertices': vertices,
             'faces': faces,
         }
+        # plot_trimesh_with_labels(trimesh, targets, save_path=f"test_gt_mesh.png")
 
         # 提取多边形
         merged_solution = MergePolygonSolution()
@@ -85,11 +63,12 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
             predict_rooms = merged_solution.get_merged_polygons_as_raster_format()
         except Exception as e:
             print(f"scene_name:{scene_name} failed to reconstruct polygons.error:{e}")
-            error_scene.append(scene_name)
+
             # plot trimesh
             plot_trimesh_with_labels(trimesh=trimesh, labels=predict,
                                      save_path=os.path.join(error_polygon_construct_path, f"{scene_name}_trimesh.png"))
 
+            error_scene.append(scene_name)
             progress_bar.update(1)
             continue
 
@@ -99,14 +78,14 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
         gt_json_path = os.path.join(gt_root, 'annotations', 'test.json')
 
         # 依据场景名称寻找coco格式的gt数据
-        density, gt_polygons_list = parse_coco_dict(
-            json_path=gt_json_path,
-            img_path=gt_img_folder,
-            num_scenes=scene_num
+        density,gt_polygons_list = parse_coco_dict(
+            json_path = gt_json_path,
+            img_path = gt_img_folder,
+            num_scenes = scene_num
         )
-        gt_data = {
-            'density': density,
-            'polygons_list': gt_polygons_list
+        gt_data ={
+            'density':density,
+            'polygons_list':gt_polygons_list
         }
 
         # 生成eval实体
@@ -115,7 +94,7 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
         room_polys = []
         # 筛选预测房间
         for polygon in predict_rooms:
-            corners = polygon  # rename polygon as corners(因为顶点集构成了多边形)
+            corners = polygon # rename polygon as corners(因为顶点集构成了多边形)
             # only regular rooms
             if len(corners) >= 4 and Polygon(corners).area >= 100:
                 room_polys.append(corners)
@@ -138,14 +117,9 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
             cv2.imwrite(os.path.join(predict_path_root, '{}_pred_floorplan.png'.format(scene_name)), floorplan_map)
         if plot_density:
             # density shape: (256, 256)
-            density_map = np.expand_dims(density, axis=-1)
+            density_map = np.expand_dims(density, axis= -1)
             density_map = np.repeat(density_map, 3, axis=2)
             pred_room_map = np.zeros([256, 256, 3])
-        if plot_gt:
-            # plot regular room floorplan # 绘制纯矢量图（不带密度图背景）
-            room_polys = [np.array(r) for r in gt_polygons_list]
-            floorplan_map = plot_floorplan_with_regions(room_polys, scale=1000)
-            cv2.imwrite(os.path.join(predict_path_root, '{}_gt_floorplan.png'.format(scene_name)), floorplan_map)
 
             for room_poly in room_polys:
                 pred_room_map = plot_room_map(room_poly, pred_room_map)
@@ -153,14 +127,18 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
             # plot predicted polygon overlaid on the density map
             pred_room_map = np.clip(pred_room_map + density_map, 0, 255)
             cv2.imwrite(os.path.join(predict_path_root, '{}_pred_room_map.png'.format(scene_name)), pred_room_map)
+        if plot_gt:
+            # plot regular room floorplan # 绘制纯矢量图（不带密度图背景）
+            room_polys = [np.array(r) for r in gt_polygons_list]
+            floorplan_map = plot_floorplan_with_regions(room_polys, scale=1000)
+            cv2.imwrite(os.path.join(predict_path_root, '{}_gt_floorplan.png'.format(scene_name)), floorplan_map)
         if idx % 10 == 0:
             # plot trimesh
             plot_trimesh_with_labels(trimesh=trimesh, labels=predict,
                                      save_path=os.path.join(trimesh_predict_path, f"{scene_name}_trimesh.png"))
             # plot floorplan
             plot_floorplan_with_rooms_and_bound(standard_polygons, ori_bound,
-                                                save_path=os.path.join(trimesh_predict_path,
-                                                                       f"{scene_name}_floorplan.png"))
+                                                save_path=os.path.join(trimesh_predict_path, f"{scene_name}_floorplan.png"))
         progress_bar.update(1)
 
     # 求平均
@@ -179,22 +157,76 @@ def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_densi
 
     print("*************************************************")
     print(quant_result_dict)
+    print(f"error_scene:{error_scene}")
     print("*************************************************")
 
-    with open(os.path.join(predict_path_root, 'results.txt'), 'w') as file:
+    with open(os.path.join(predict_path_root, 'quant_results.txt'), 'w') as file:
         file.write(json.dumps(quant_result_dict))
+
+
+def debug_eval_core(config, predict_json_path, dataset,plot_pred=False, plot_density=False):
+    idx = 103
+    predict_path_root = predict_json_path  # 同名
+    predict_json = os.path.join(predict_path_root, 'predict.txt')
+    predict_dict = json.load(open(predict_json, 'r'))
+
+    trimesh_predict_path = os.path.join(predict_path_root, "trimesh_predict")
+    if not os.path.exists(trimesh_predict_path):
+        os.makedirs(trimesh_predict_path)
+
+    error_polygon_construct_path = os.path.join(predict_path_root, "error_polygon_construct")
+    if not os.path.exists(error_polygon_construct_path):
+        os.makedirs(error_polygon_construct_path)
+
+    total_task_num = len(predict_dict.keys())
+    quant_result_dict = None
+    scene_counter = 0
+    progress_bar = tqdm(total=total_task_num, desc="Inference")
+    error_scene = []
+    time_record = []
+
+
+    # 训练时，为了方便索引，类别从0开始
+    _, targets, vertices, faces, _, ori_bound = dataset.get_all_features_for_shape(idx)
+    scene_name = dataset.get_name(idx)
+    scene_num = int(scene_name.split("_")[1])
+    progress_bar.set_description(f"Inference {scene_name}")
+    predict = predict_dict[scene_name]
+    predict = np.array(predict)
+    predict = np.where(predict == 4, 32, predict)
+    vertices = process_vertice_by_ori_bound(vertices=vertices, ori_bound=ori_bound)
+    trimesh = {
+        'vertices': vertices,
+        'faces': faces,
+    }
+    # plot_trimesh_with_labels(trimesh, targets, save_path=f"test_gt_mesh.png")
+
+    # 提取多边形
+    merged_solution = MergePolygonSolution()
+    try:
+        merged_solution.load_data_from_model_inference(vertices, faces, predict)
+        merged_solution.start_work_with_time_analysis()
+        standard_polygons = merged_solution.get_merged_polygons_with_coords()
+        predict_rooms = merged_solution.get_merged_polygons_as_raster_format()
+    except Exception as e:
+        print(f"scene_name:{scene_name} failed to reconstruct polygons.error:{e}")
+
+        # plot trimesh
+        plot_trimesh_with_labels(trimesh=trimesh, labels=predict,
+                                 save_path=os.path.join(error_polygon_construct_path, f"{scene_name}_trimesh.png"))
+
+        error_scene.append(scene_name)
+        progress_bar.update(1)
+
 
 
 @hydra.main(config_path='../config', config_name='graph_transformer', version_base='1.2')
 def main(config):
-    load_checkpoint_path = config.load_checkpoint_path
-    if config.inference_dataset_path is None:
-        print("inference_dataset_path:None，user test part of train model dataset")
-        dataset = FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes(config, 'test','scene_name')
-    else:
-        print(f"inference_dataset_path:{config.inference_dataset_path},but currently not support across dataset inference")
-        return
-    eval_model(config, load_checkpoint_path, dataset, plot_pred=True, plot_density=True)
+    dataset = FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes(config, 'test','scene_names')
+    result_path = r"G:\workspace_plane2DDL\to_construct\augment\0308"
+    # debug_eval_core(config, result_path, dataset,plot_pred=True, plot_density=True)
+    eval_core(config, result_path, dataset,plot_pred=True, plot_density=True,plot_gt=True)
+
 
 if __name__ == '__main__':
     main()

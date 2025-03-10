@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import shutil
@@ -7,7 +8,7 @@ import cv2
 import trimesh
 from trimesh.exchange import obj
 import numpy as np
-
+import time
 from ablation.only_segment_room_and_wall import FPTriangleWithThreeClsNodes
 from dataset import sort_vertices_and_faces
 from dataset.floorplan_triangles import FPTriangleNodes,FPOriginTriangleNodes
@@ -113,5 +114,19 @@ def main(config):
     print("done")
 
 
+def test_tmp():
+    time_record = []
+    for i in range(5):
+        start = time.perf_counter()
+        a = 5
+        end = time.perf_counter()
+        time_record.append(end-start)
+    # time = [2.0,2.1,2.2,2.3]
+    avg_time = sum(time_record)/len(time_record)
+    d = {}
+    d['avg_time'] = avg_time
+    json_str = json.dumps(d)
+    print(json_str)
+
 if __name__ == '__main__':
-    main()
+    test_tmp()
