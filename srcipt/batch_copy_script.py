@@ -2,6 +2,7 @@ import os
 import shutil
 import tqdm
 
+"拷贝文件脚本"
 
 def copy_files(src, tgt):
     dir_name = os.path.dirname(tgt)
@@ -29,6 +30,8 @@ def batch_copy_files(src, folder_root):
 
 
 if __name__ == '__main__':
-    src_file = r"G:\workspace_plane2DDL\confidence_and_GT.mxd"
-    dest_folder = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_featured_shp"
+    # src_file = r"...\confidence_and_GT.mxd"
+    src_file = r""
+    # dest_folder = r"...\stru3d_featured_shp"
+    dest_folder = r""
     batch_copy_files(src_file, dest_folder)

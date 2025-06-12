@@ -23,7 +23,7 @@ from trainer.train_triangle import GraphTransformerEncoder
 from tqdm import tqdm
 
 
-def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_density=False):
+def eval_model(config, load_checkpoint_path, dataset,plot_pred=False, plot_density=False,plot_gt = False):
     save_inference_path = config.save_inference_path
     # checkpoint_path = os.path.join(load_model_experiment_path, "checkpoints", load_checkpoint_name)
 

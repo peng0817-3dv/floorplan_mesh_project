@@ -10,6 +10,10 @@ density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
 img_folder = os.path.join(density_folder, 'test')
 annotation_json_path = os.path.join(density_folder, 'annotations', 'test.json')
 
+'''
+用于评估数据集预测结果的脚本，在inference时已写了相关代码调用评估函数整体评估过了，此处为早期代码，暂时不用
+'''
+
 def evaluate_single_floor(predict_floor:dict,):
     '''
     predict_floor: dict, {'vertex': (n_v, 3), 'faces': (n_f, 3), 'floor_label': (n_f, 1)}
@@ -17,7 +21,7 @@ def evaluate_single_floor(predict_floor:dict,):
     pass
 
 def evaluate_floor_with_mockdata():
-    mock_data_path = r'G:\workspace_plane2DDL\testData\10_percent_box\scene_00020'
+    mock_data_path = r'...\testData\10_percent_box\scene_00020'
 
     merged_solution = MergePolygonSolution()
     merged_solution.load_data_from_shp_file(mock_data_path)

@@ -9,10 +9,9 @@ from dataset.floorplan_triangles import FPTriangleNodes, FPTriangleNodesDataload
 from lightning_utilities.core.rank_zero import rank_zero_only
 from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
 
-from model.decoder import resnet34_decoder
+from something_back_up.decoder import resnet34_decoder
 from model.encoder import get_conv
 from trainer import create_trainer, step, create_conv_batch
-from util.positional_encoding import get_embedder
 
 
 class WithoutPE(pl.LightningModule):

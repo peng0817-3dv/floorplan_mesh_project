@@ -6,6 +6,9 @@ import numpy as np
 from util.s3d_data_load import read_s3d_mesh_info, global_label_colors, enum_label, get_faces_coord
 from util.visualization import export_face_to_obj
 
+'''
+this file is used to store functions for analyzing the dataset split and label distribution
+'''
 
 def analyse_dataset_split(splits: list, label_datas, analyse_results_path = None):
     # s = sum(len(split) for split in splits)

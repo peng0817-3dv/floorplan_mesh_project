@@ -29,7 +29,8 @@ def task_function(params:Param, progress_queue):
     # print(f"Processed file:{scene_name}")
 
 def main():
-    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\stru3d_pointcloud_scale_0.001"
+    # I:\structured3d_scale_0.001_scene_0_999\structured3d_scale_0.001_scene_0_999
+    root_dir = r"H:\3400_3410"
     total_tasks = len(os.listdir(root_dir))
     # 使用 Manager 提供的队列进行进程间通信
     with Manager() as manager:

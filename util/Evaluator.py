@@ -4,6 +4,14 @@ import numpy as np
 corner_metric_thresh = 10
 angle_metric_thresh = 5
 
+'''
+this file is used to evaluate the room/corner/angle eval value of the density map scale GT floor plan  
+with the predict floor plan data.
+
+it's refer from the RoomFormer code.
+'''
+
+
 class Evaluator:
     def __init__(self,data_rw):
         self.gt_data = data_rw

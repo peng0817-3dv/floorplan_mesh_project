@@ -3,10 +3,9 @@ from torch import nn
 from torch.nn import ModuleList
 from taylor_series_linear_attention import TaylorSeriesLinearAttn
 from local_attention import LocalMHA
-from x_transformers.x_transformers import RMSNorm, FeedForward, LayerIntermediates
+from x_transformers.x_transformers import RMSNorm, FeedForward
 
-
-from model.nanogpt import configure_optimizers
+from something_back_up.nanogpt import configure_optimizers
 
 
 class TransformerBase(nn.Module):

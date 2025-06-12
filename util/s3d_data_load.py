@@ -45,7 +45,7 @@ class enum_label(Enum):
 
 
 global_label_colors = [
-'#e7c9b7',  # 1 living_room
+'#78a7cf',  # 1 living_room
 '#5c6bc0',  # 2 kitchen
 '#ff5733',  # 3 bedroom
 '#1e88e5',  # 4 bathroom
@@ -75,8 +75,8 @@ global_label_colors = [
 '#8e24aa',
 '#7b1fa2',
 '#e1bee7',
-'white',  # 31 out_wall
-'black'  # 32 in_wall
+'#ff5c5c',  # 31 out_wall
+'#ffff5c'  # 32 in_wall
 ]
 
 
@@ -204,6 +204,24 @@ def get_faces_data(face_file):
         faces_label += 1
 
     return faces, faces_confidences, faces_label
+
+def get_no_confidence_faces(face_file):
+    sf = shapefile.Reader(face_file)
+    records = sf.records()
+
+    # 使用一次遍历提取所有需要的信息
+    faces = []
+    faces_label = []
+
+    for r in records:
+        faces.append((r[PROPERTY_FACE_P0], r[PROPERTY_FACE_P1], r[PROPERTY_FACE_P2]))
+
+        # 如果 label 为 -2，则将其改为 -1，然后把所有值都加1，保证范围在0以上
+        label = r[PROPERTY_FACE_LABEL]
+
+        faces_label.append(label)
+
+    return faces, faces_label
 
 
 def get_edge_id_of_face(face: tuple, point_id_to_edge_id):

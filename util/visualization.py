@@ -181,6 +181,44 @@ def export_face_to_obj(faces, output_path):
         vertices_id = vertices_id + len(face) - 1
     save_line_segments_to_obj(output_path, vertices, lines)
 
+
+def save_face_shp_with_label(output_path,vertices,faces,label):
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    faces_file = os.path.join(output_path, DATA_FACE_FILENAME)
+
+    writer = shapefile.Writer(faces_file)
+    writer.field(PROPERTY_FACE_LABEL, "N", 5)  # 修改为字符串类型
+    writer.field(PROPERTY_FACE_P0, "N", 5)
+    writer.field(PROPERTY_FACE_P1, "N", 5)
+    writer.field(PROPERTY_FACE_P2, "N", 5)
+
+    for face_id, face in enumerate(faces):
+        # 获取面的顶点坐标
+        p0 = vertices[face[0]]
+        p1 = vertices[face[1]]
+        p2 = vertices[face[2]]
+
+        # 创建多边形
+        polygon = [
+            [p0[0], p0[1]],
+            [p1[0], p1[1]],
+            [p2[0], p2[1]],
+            [p0[0], p0[1]]  # 闭合多边形
+        ]
+
+        writer.poly([polygon])
+        writer.record(
+            label[face_id],
+            face[0],
+            face[1],
+            face[2],
+        )
+    # 保存并关闭文件
+    writer.close()
+
+
 def export_mesh_to_shp(vertices,faces,labels,output_path):
     if not os.path.exists(output_path):
         os.makedirs(output_path)
@@ -578,7 +616,7 @@ def plot_trimesh_with_labels(trimesh, labels, title="trimesh",save_path = None):
     for i,polygon in enumerate(polygons) :
         x, y = polygon.exterior.xy
         try:
-            plt.fill(x, y, alpha=1, fc=global_label_colors[labels[i] - 1], ec='gray',linewidth=0.2)  # 填充多边形
+            plt.fill(x, y, alpha=1, fc=global_label_colors[labels[i] - 1], ec='black',linewidth=0.2)  # 填充多边形
         except Exception as e:
             print(e)
             return
@@ -664,3 +702,69 @@ def plot_room_map(preds, room_map, im_size=256):
                     0.4, (0, 255, 0), 1, cv2.LINE_AA)
 
     return room_map
+
+
+def plot_standard_point_cloud_density(
+        points, save_path,
+        min_axis_raster_size=800,
+        log_density = False,
+        acrtan_density = False,
+):
+    '''
+    points: (N, 3) numpy array
+
+    '''
+
+    max_coords = np.max(points, axis=0)
+    min_coords = np.min(points, axis=0)
+
+    max_m_min = max_coords - min_coords
+    # 填充，向外填充10%
+    max_coords = max_coords + 0.1 * max_m_min
+    min_coords = min_coords - 0.1 * max_m_min
+
+    max_m_min = max_coords - min_coords
+
+    width_range = max_m_min[0]
+    height_range = max_m_min[1]
+
+    img_res = []
+    if width_range > height_range:
+        img_res = [min_axis_raster_size, int(min_axis_raster_size * height_range / width_range)]
+    else:
+        img_res = [int(min_axis_raster_size * width_range / height_range), min_axis_raster_size]
+    img_res = np.array(img_res)
+
+    # 真实坐标向栅格坐标转换
+    coordinates = \
+        np.round(
+            (points[:, :2] - min_coords[None, :2]) / (max_coords[None, :2] - min_coords[None, :2]) * img_res[None])
+
+    coordinates = np.minimum(np.maximum(coordinates, np.zeros_like(img_res)),
+                                img_res - 1)
+
+    density = np.zeros((img_res[1],img_res[0]), dtype=np.float32)
+    unique_coordinates, counts = np.unique(coordinates, return_counts=True, axis=0)
+    unique_coordinates = unique_coordinates.astype(np.int32)
+
+    density[unique_coordinates[:, 1], unique_coordinates[:, 0]] = counts
+    density = density / np.max(density)
+
+    if log_density:
+        density = np.log(density + 1)/np.log(2)
+    if acrtan_density:
+        density = np.arctan(density * 5) / np.arctan(5)
+
+    img_name = 'density_map'
+    if log_density:
+        img_name = 'log_' + img_name
+    elif acrtan_density:
+        img_name = 'acrtan_' + img_name
+    density_path = os.path.join(save_path, img_name+'.png')
+    density_uint8 = (density * 255).astype(np.uint8)
+    density_uint8 = 255 - density_uint8
+    cv2.imwrite(density_path, density_uint8)
+
+
+
+

@@ -8,10 +8,15 @@ from pycocotools import coco
 from pycocotools.coco import COCO
 from tqdm import tqdm
 from shapely.geometry import Polygon
-from util.s3d_data_process import read_scale_table, generate_augmented_point_cloud_density_map, export_density
-from util.visualization import visualization_seg
+from util.s3d_data_process import read_scale_table, generate_augmented_point_cloud_density_map, export_density, \
+    generate_density_by_distortion, export_flip_density, to_density_map_result_from_real_world
+from util.visualization import visualization_seg, plot_floorplan_with_regions
 from skimage import io as skimage_io
 import io
+
+'''
+生成coco格式的stru3d数据集和scd数据集
+'''
 
 type2id = {'living room': 0, 'kitchen': 1, 'bedroom': 2, 'bathroom': 3, 'balcony': 4, 'corridor': 5,
             'dining room': 6, 'study': 7, 'studio': 8, 'store room': 9, 'garden': 10, 'laundry room': 11,
@@ -200,6 +205,56 @@ def generate_coco_dict(annos, polygons, curr_instance_id, curr_img_id, ignore_ty
     return coco_annotation_dict_list
 
 
+def generate_coco_dict_2(polygons, curr_instance_id, curr_img_id):
+    coco_annotation_dict_list = []
+    for poly_ind, polygon in enumerate(polygons):
+
+        poly_shapely = Polygon(polygon)
+        area = poly_shapely.area
+
+        # assert area > 10
+        # if area < 100:
+        if area < 100:
+            continue
+        rectangle_shapely = poly_shapely.envelope
+        coco_seg_poly = []
+        polygon = np.array(polygon)
+        poly_sorted = resort_corners(polygon)
+
+        for p in poly_sorted:
+            coco_seg_poly += list([int(p[0]), int(p[1])])
+
+        # Slightly wider bounding box
+        bound_pad = 2
+        bb_x, bb_y = rectangle_shapely.exterior.xy
+        bb_x = np.unique(bb_x)
+        bb_y = np.unique(bb_y)
+        bb_x_min = np.maximum(np.min(bb_x) - bound_pad, 0)
+        bb_y_min = np.maximum(np.min(bb_y) - bound_pad, 0)
+
+        bb_x_max = np.minimum(np.max(bb_x) + bound_pad, 256 - 1)
+        bb_y_max = np.minimum(np.max(bb_y) + bound_pad, 256 - 1)
+
+        bb_width = (bb_x_max - bb_x_min)
+        bb_height = (bb_y_max - bb_y_min)
+
+        coco_bb = [bb_x_min, bb_y_min, bb_width, bb_height]
+
+        coco_annotation_dict = {
+            "segmentation": [coco_seg_poly],
+            "area": area,
+            "iscrowd": 0,
+            "image_id": curr_img_id,
+            "bbox": coco_bb,
+            "category_id": type2id['living room'],
+            "id": curr_instance_id}
+
+        coco_annotation_dict_list.append(coco_annotation_dict)
+        curr_instance_id += 1
+
+    return coco_annotation_dict_list
+
+
 def parse_coco_dict(json_path, img_path, num_scenes):
 
     with contextlib.redirect_stdout(io.StringIO()):
@@ -225,10 +280,10 @@ def parse_coco_dict(json_path, img_path, num_scenes):
 
 
 def main():
-    out_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
+    out_folder = r'...\augment_point_cloud_density'
     point_cloud_folder = r'I:\s3dParseT5'
-    annotation_folder = r'G:\workspace_plane2DDL\data_anno'
-    scale_table_path = r'G:\workspace_plane2DDL\data_anno_scales\scales.txt'
+    annotation_folder = r'...\data_anno'
+    scale_table_path = r'...\data_anno_scales\scales.txt'
     scale_table = read_scale_table(scale_table_path)
 
     data_parts = os.listdir(point_cloud_folder)
@@ -318,13 +373,200 @@ def main():
     with open(coco_test_json_path, 'w') as f:
         json.dump(coco_test_dict, f)
 
+
+def main_2():
+    out_folder = r'G:\workspace_plane2DDL\real_point_cloud_dataset\other_point_cloud\coco_root'
+    point_cloud_folder = r'G:\workspace_plane2DDL\real_point_cloud_dataset\other_point_cloud\pc_root'
+    import laspy
+    rooms_dict ={
+        'scene_001':[
+            [[26,25],[144,25],[144,155],[26,155]],
+            [[148,27],[198,27],[198,155],[148,155]],
+            [[26,159],[26,233],[232,233],[232,64],[202,64],[202,159]],
+        ],
+        'scene_002':[
+          [[76,27],[98,27],[98,52],[76,52]],
+          [[76,62],[201,62],[201,144],[76,144]],
+          [[73,59],[73,86],[68,86],[68,102],[25,102],[25,59]],
+          [[73,104],[73,144],[51,144],[51,154],[25,154],[25,104]],
+          [[204,62],[228,62],[217,144],[204,144]],
+          [[57,149],[74,149],[74,226],[26,226],[26,158],[57,158]],
+          [[76,149],[115,149],[115,225],[76,225]],
+          [[118,149],[214,149],[214,226],[154,226],[154,178],[118,178]],
+          [[118,180],[152,180],[152,227],[129,227],[129,217],[118,217]],
+        ],
+        'scene_003':[
+            [[43,24],[204,24],[204,75],[126,75],[126,111],[103,111],[103,75],[43,75]],
+            [[43,78],[101,78],[101,111],[43,111]],
+            [[129,78],[204,78],[204,111],[129,111]],
+            [[43,114],[230,114],[230,160],[190,160],[190,185],[120,185],[120,193],[43,193]],
+            [[43,195],[120,195],[120,218],[60,218],[60,212],[43,212]],
+            [[193,162],[230,162],[230,178],[223,178],[223,185],[193,185]],
+        ],
+        'scene_004':[
+            [[197,117],[228,117],[228,137],[197,137]],
+            [[224,112],[224,66],[209,66],[209,29],[43,29],[43,100],[180,100],[180,112]],
+            [[43,104],[176,104],[176,116],[191,116],[191,136],[129,136],[129,140],[191,140],[191,192],[129,192],[129,196],[191,196],[191,228],[43,228]],
+        ],
+    }
+    data_parts = os.listdir(point_cloud_folder)
+    output_annotation_folder = os.path.join(out_folder, 'annotations')
+    ### prepare
+
+    if not os.path.exists(out_folder):
+        os.mkdir(out_folder)
+    if not os.path.exists(output_annotation_folder):
+        os.mkdir(output_annotation_folder)
+
+    train_img_folder = os.path.join(out_folder, 'train')
+    val_img_folder = os.path.join(out_folder, 'val')
+    test_img_folder = os.path.join(out_folder, 'test')
+
+    for img_folder in [train_img_folder, val_img_folder, test_img_folder]:
+        if not os.path.exists(img_folder):
+            os.mkdir(img_folder)
+
+    coco_train_json_path = os.path.join(output_annotation_folder, 'train.json')
+    coco_val_json_path = os.path.join(output_annotation_folder, 'val.json')
+    coco_test_json_path = os.path.join(output_annotation_folder, 'test.json')
+
+    coco_train_dict = {"images":[],"annotations":[],"categories":[]}
+    coco_val_dict = {"images":[],"annotations":[],"categories":[]}
+    coco_test_dict = {"images":[],"annotations":[],"categories":[]}
+
+    for key, value in type2id.items():
+        type_dict = {"supercategory": "room", "id": value, "name": key}
+        coco_train_dict["categories"].append(type_dict)
+        coco_val_dict["categories"].append(type_dict)
+        coco_test_dict["categories"].append(type_dict)
+
+    ### begin processing
+    instance_id = 0
+
+    for scene in tqdm(data_parts):
+        scene_path = os.path.join(point_cloud_folder, scene)
+        scene_id = scene.split('_')[-1]
+
+        las_path = os.path.join(scene_path, 'poinc_cloud.las')
+        if not os.path.exists(las_path):
+            continue
+
+        pc = laspy.read(las_path)
+        number_points = len(pc)
+        x = np.reshape(pc.x, (number_points, 1))
+        y = np.reshape(pc.y, (number_points, 1))
+        z = np.reshape(pc.z, (number_points, 1))
+        xyz = np.hstack((x, y, z))
+        density, normalization_dict = generate_density_by_distortion(xyz)
+
+
+        ### prepare coco dict
+        img_id = int(scene_id)
+        img_dict = {}
+        img_dict["file_name"] = scene_id + '.png'
+        img_dict["id"] = img_id
+        img_dict["width"] = 256
+        img_dict["height"] = 256
+        rooms = rooms_dict[scene]
+        polygons_list = generate_coco_dict_2(rooms, instance_id, img_id)
+        instance_id += len(polygons_list)
+
+        coco_test_dict["images"].append(img_dict)
+        coco_test_dict["annotations"] += polygons_list
+        export_density(density, test_img_folder, scene_id)
+
+        print(scene_id)
+
+    with open(coco_train_json_path, 'w') as f:
+        json.dump(coco_train_dict, f)
+    with open(coco_val_json_path, 'w') as f:
+        json.dump(coco_val_dict, f)
+    with open(coco_test_json_path, 'w') as f:
+        json.dump(coco_test_dict, f)
+
+
+
+def generate_flip_density_map():
+    out_folder = r'H:\3280-3285_vis'
+    point_cloud_folder = r'H:\3280-3285'
+
+    if not os.path.exists(out_folder):
+        os.mkdir(out_folder)
+
+    train_img_folder = os.path.join(out_folder, 'train')
+    val_img_folder = os.path.join(out_folder, 'val')
+    test_img_folder = os.path.join(out_folder, 'test')
+
+    for img_folder in [train_img_folder, val_img_folder, test_img_folder]:
+        if not os.path.exists(img_folder):
+            os.mkdir(img_folder)
+
+    data_parts = os.listdir(point_cloud_folder)
+    import laspy
+    for scene in tqdm(data_parts):
+        scene_path = os.path.join(point_cloud_folder, scene)
+        las_path = os.path.join(scene_path, f'point_cloud.las')
+        scene_id = scene.split('_')[-1]
+
+        pc = laspy.read(las_path)
+        number_points = len(pc)
+        x = np.reshape(pc.x, (number_points, 1))
+        y = np.reshape(pc.y, (number_points, 1))
+        z = np.reshape(pc.z, (number_points, 1))
+        xyz = np.hstack((x, y, z))
+        density, normalization_dict = generate_density_by_distortion(xyz)
+        export_density(density, test_img_folder, scene_id)
+
+        print(scene_id)
+
+
 def visualize_result():
-    out_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
+    out_folder = r'G:\workspace_plane2DDL\real_point_cloud_dataset\other_point_cloud\coco_root'
     img_folder = os.path.join(out_folder, 'test')
     annotation_json_path = os.path.join(out_folder, 'annotations', 'test.json')
-    r1,r2 = parse_coco_dict(annotation_json_path, img_folder, 3025)
-    visualization_seg(3025, annotation_json_path, img_folder)#2104
+    # r1,r2 = parse_coco_dict(annotation_json_path, img_folder, 3025)
+    visualization_seg(4, annotation_json_path, img_folder)#2104
+
+
+def generate_density_predict(predict_file,scale_json_path,output_folder):
+    import json
+    with open(scale_json_path, 'r') as f:
+        scale_table = json.load(f)
+    with open(predict_file, 'r') as f:
+        predict_scenes = json.load(f)
+    # scene_name = predict_file.split('/')[-1].split('.')[0]
+    output_result = {}
+
+    for scene in predict_scenes.keys():
+        predict_rooms = predict_scenes[scene]
+        scale = scale_table[scene]
+        density_map_result = to_density_map_result_from_real_world(
+            rooms=predict_rooms,
+            x_range=scale[0],
+            y_range=scale[1],
+            x_min=scale[2],
+            y_min=scale[3],
+        )
+        output_result[scene] = density_map_result
+
+        room_polys = [np.array(r) for r in density_map_result]
+        floorplan_map = plot_floorplan_with_regions(room_polys, scale=1000)
+        path = os.path.join(output_folder, '{}_pred_floorplan.png'.format(scene))
+        print(path)
+        success = cv2.imwrite(path, floorplan_map)
+        print(success)
+
+    result_json_path = os.path.join(output_folder, 'jys_predict_rooms_density.json')
+    with open(result_json_path, 'w') as f:
+        json.dump(output_result, f)
+
+
 
 if __name__ == '__main__':
-    visualize_result()
+
+    generate_density_predict(
+        predict_file=r'G:\workspace_plane2DDL\record\scd数据集推理结果\jys\jys_predict_rooms_2.json',
+        scale_json_path= r'G:\workspace_plane2DDL\real_point_cloud_dataset\other_point_cloud\dataset_real_world_range.json',
+        output_folder= r'G:\workspace_plane2DDL\real_point_cloud_dataset\other_point_cloud\jys_result'
+    )
 

@@ -2,13 +2,13 @@ import hydra
 import pytorch_lightning as pl
 import torch
 from dataset.floorplan_triangles import FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes,FPTriangleNodesDataloader
-from model.encoder import GraphEncoder, GraphEncoderAdaptExtraFeatures
+from model.encoder import GraphEncoderAdaptExtraFeatures
 from model.transformer_base import TransformerNet
 from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
 from trainer import create_conv_batch, step, create_trainer
 from lightning_utilities.core.rank_zero import rank_zero_only
 import numpy as np
-from dataset.triangles import angle as angle_func
+from something_back_up.triangles import angle as angle_func
 
 
 class GraphTransformerEncoder(pl.LightningModule):
@@ -92,6 +92,7 @@ class GraphTransformerEncoder(pl.LightningModule):
             step(optimizer, [self.encoder, self.FFN])
             optimizer.zero_grad(set_to_none=True)  # type: ignore
         self.log("lr", optimizer.param_groups[0]['lr'], on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)  # type: ignore
+
 
 
     def angle_loss(self, data, decoded_x):

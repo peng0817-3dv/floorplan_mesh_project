@@ -1,8 +1,4 @@
-import torch_geometric
-import torch_scatter
 import torch
-import torch.nn as nn
-from torch.nn import ModuleList
 
 import pytorch_lightning as pl
 import hydra
@@ -10,13 +6,8 @@ from dataset.floorplan_triangles import FPTriangleNodes, FPTriangleNodesDataload
 from lightning_utilities.core.rank_zero import rank_zero_only
 from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
 
-from model.decoder import resnet34_decoder
-from model.encoder import get_conv, GraphEncoder
+from model.encoder import GraphEncoder
 from trainer import create_trainer, step, create_conv_batch
-from util.positional_encoding import get_embedder
-from taylor_series_linear_attention import TaylorSeriesLinearAttn
-from local_attention import LocalMHA
-from x_transformers.x_transformers import RMSNorm, FeedForward, LayerIntermediates
 
 
 class RemoveDecoder(pl.LightningModule):

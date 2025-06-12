@@ -3,23 +3,19 @@ import pickle
 from pathlib import Path
 
 import numpy as np
-import shapefile
 import torch
 import trimesh
 from torch_geometric.data import Dataset as GeometricDataset
 from tqdm import tqdm
 
-from dataset import sort_vertices_and_faces,sort_vertices_and_faces_and_labels_and_features
-from dataset.triangles import FaceCollator
-from util.analyse_dataset import random_split, analyse_dataset_split
+from dataset import sort_vertices_and_faces_and_labels_and_features
+from something_back_up.triangles import FaceCollator
+from util.analyse_dataset import random_split
 from util.misc import scale_vertices, normalize_vertices, shift_vertices, rotate_vertices, mirror_vertices
 from util.visualization import plot_vertices_and_faces_with_labels,export_mesh_to_obj
 from util.s3d_data_load import read_s3d_mesh_info
-import matplotlib.pyplot as plt
-from matplotlib.collections import PolyCollection
 
 from torch_geometric.data import Data as GeometricData
-from torch_geometric.loader.dataloader import Collater as GeometricCollator
 
 
 class FPTriangleNodes(GeometricDataset):
@@ -265,22 +261,6 @@ class FPTriangleNodes(GeometricDataset):
         self.names = augmented_names
 
 
-class FPTriangleNodesDataloader(torch.utils.data.DataLoader):
-    def __init__(self, dataset, batch_size=1, shuffle=False, follow_batch=None, exclude_keys=None, **kwargs):
-        # Remove for PyTorch Lightning:
-        kwargs.pop('collate_fn', None)
-        # Save for PyTorch Lightning < 1.6:
-        self.follow_batch = follow_batch
-        self.exclude_keys = exclude_keys
-        super().__init__(
-            dataset,
-            batch_size,
-            shuffle,
-            collate_fn=FaceCollator(follow_batch, exclude_keys),
-            **kwargs,
-        )
-
-
 class FPTriangleWithGeneratedFeaturesNodes(FPTriangleNodes):
     def __init__(self, config, split, split_mode="ratio"):
         super().__init__(config, split, split_mode)
@@ -348,8 +328,20 @@ class FPTriangleWithGeneratedFeaturesAndLabel3ClsNodes(FPTriangleWithGeneratedFe
         return torch.from_numpy(labels).long() - 1
 
 
-
-
+class FPTriangleNodesDataloader(torch.utils.data.DataLoader):
+    def __init__(self, dataset, batch_size=1, shuffle=False, follow_batch=None, exclude_keys=None, **kwargs):
+        # Remove for PyTorch Lightning:
+        kwargs.pop('collate_fn', None)
+        # Save for PyTorch Lightning < 1.6:
+        self.follow_batch = follow_batch
+        self.exclude_keys = exclude_keys
+        super().__init__(
+            dataset,
+            batch_size,
+            shuffle,
+            collate_fn=FaceCollator(follow_batch, exclude_keys),
+            **kwargs,
+        )
 
 
 # 废弃

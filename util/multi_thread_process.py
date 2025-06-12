@@ -2,8 +2,11 @@ import os
 from multiprocessing import Pool, Manager
 from tqdm import tqdm
 
-CPP_EXE_PATH = r"F:\DIP\DipTools_Indoor\bin\Release\ExportMeshGptFeature.exe"
+'''
+this file is used to process function with multi-thread
+'''
 
+CPP_EXE_PATH = r""
 
 class Param:
     def __init__(self, input_file, output_file, label_file,scene_name):
@@ -66,9 +69,14 @@ def show_progress(total_tasks,progress_queue):
     tqdm_bar.close()
 
 def main():
-    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_pointcloud"
-    label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_anno"
-    result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_featured_shp"
+    # root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_pointcloud"
+    # label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_anno"
+    # result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_featured_shp"
+
+    root_dir = r""
+    label_dir = r""
+    result_dir = r""
+
     point_cloud_name = "scale.laz"
     label_name = "GT_room_poly.shp"
     total_tasks = len(os.listdir(root_dir))
@@ -104,15 +112,17 @@ def main():
 
 
 def test_cpp_exe():
-    root_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_pointcloud"
-    label_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_anno"
-    result_dir = r"G:\workspace_plane2DDL\real_point_cloud_dataset\augment_stru3d_featured_shp"
+    # sample: root_dir = r"...\augment_stru3d_pointcloud"
+    root_dir = r""
+    # sample: label_dir = r"...\augment_stru3d_anno"
+    label_dir = r""
+    # sample: result_dir = r"...\augment_stru3d_featured_shp"
+    result_dir = r""
     scene = "scene_00001"
     cpp_exe_process(os.path.join(root_dir, scene, "scale.laz"), os.path.join(label_dir, scene, "GT_room_poly.shp")\
                     , os.path.join(result_dir, scene))
 
 
 if __name__ == '__main__':
-    # from_ply_to_las(r"H:\0-400\scene_00004")
+
     main()
-    # test_cpp_exe()

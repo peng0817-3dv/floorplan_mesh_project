@@ -7,11 +7,10 @@ import torch
 import trimesh
 from dataset import sort_vertices_and_faces_and_labels_and_features
 from dataset.floorplan_triangles import FPTriangleNodes, FPTriangleNodesDataloader
-from model.decoder import resnet34_decoder
 from model.encoder import GraphEncoder
 from trainer import create_conv_batch, step, create_trainer
 from util.misc import scale_vertices, normalize_vertices, shift_vertices
-from dataset.triangles import angle as angle_func
+from something_back_up.triangles import angle as angle_func
 
 class FPTriangleWithThreeClsNodes(FPTriangleNodes):
     def __init__(self, config, split, split_mode="ratio"):

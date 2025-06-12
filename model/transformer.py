@@ -6,7 +6,7 @@ from torch.nn import functional as F
 
 from dataset import get_shifted_sequence
 from model.transformer_base import TransformerBase
-from model.nanogpt import Block, LayerNorm
+from something_back_up.nanogpt import Block, LayerNorm
 from util.misc import top_p_sampling
 from tqdm import tqdm
 

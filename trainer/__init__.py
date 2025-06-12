@@ -1,5 +1,4 @@
 import os
-import signal
 import sys
 import traceback
 from pathlib import Path
@@ -18,7 +17,7 @@ from pytorch_lightning.loggers.tensorboard import TensorBoardLogger
 from vector_quantize_pytorch import ResidualVQ
 
 from model.encoder import GraphEncoder
-from model.decoder import resnet34_decoder
+from something_back_up.decoder import resnet34_decoder
 from util.filesystem_logger import FilesystemLogger
 from util.misc import get_parameters_from_state_dict
 

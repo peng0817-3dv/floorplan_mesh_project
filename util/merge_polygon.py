@@ -13,6 +13,12 @@ from util.s3d_data_load import enum_label, get_vertices_coord, get_faces_point_i
 from util.visualization import visualization_seg_with_custom_anno
 
 
+'''
+this file is used to merge polygons after model predict.
+
+'''
+
+
 def is_connected(src, tgt, graph):
     q = queue.Queue()
     visited = [False] * len(graph)
@@ -71,6 +77,8 @@ class MergePolygonSolution:
         groups = self.split_mesh(ajacent_graph)
         self.merge_mesh_with_shapely(groups)
         self.simplify_mesh_2()
+        print("merged polygons:", len(self._merged_polygons))
+
 
     def start_work_with_time_analysis(self):
         start_time = datetime.now()
@@ -456,19 +464,15 @@ def test_merge_polygon_with_mock_data():
     solution.start_work()
     rooms = solution.get_merged_polygons_with_coords()
 
+
 def test_merge_polygon():
     start_time = datetime.now()
-    shp_file_root = r'G:\workspace_plane2DDL\testData\10_percent_box\scene_00020'
+    shp_file_root = r''
     solution = MergePolygonSolution()
     solution.load_data_from_shp_file(shp_file_root)
     solution.start_work()
     coco_dict = solution.get_merged_polygons_as_coco_format(20)
 
-    # density_folder = r'G:\workspace_plane2DDL\augment_point_cloud_density'
-    # img_folder = os.path.join(density_folder, 'train')
-    # annotation_json_path = os.path.join(density_folder, 'annotations', 'train.json')
-    #
-    # visualization_seg_with_custom_anno(20,img_path=img_folder,json_path=annotation_json_path,coco_anno_dict=coco_dict)
 
 if __name__ == '__main__':
     test_merge_polygon()
