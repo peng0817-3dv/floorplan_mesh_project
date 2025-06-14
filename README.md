@@ -82,7 +82,7 @@ dataset_root
 
 ```
 # only for structured3d 
-python trainer/train_triangle.py <options> dataset_root=<path_to_dataset_root>
+python trainer/train_triangle.py dataset_root=<path_to_dataset_root>
 ```
 
 After first loading the dataset, the cache file will be saved in the directory of the dataset root as "cache.pkl".
